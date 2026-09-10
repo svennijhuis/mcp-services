@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using McpServices.Hosting;
+using McpServices.Index.Embeddings;
 using McpServices.Index.Indexing;
 using McpServices.Storage;
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,8 @@ public sealed record RepositoryStatus(
     string? LastError,
     string? IndexingInProgressBy,
     bool BackgroundRefreshRunning,
-    Freshness Freshness);
+    Freshness Freshness,
+    EmbeddingStatus? Embeddings);
 
 /// <summary>
 /// Glue between tools and the indexing pipeline: resolves which repository a call refers to,
@@ -33,12 +35,17 @@ public sealed class IndexCoordinator(
     Indexer indexer,
     FreshnessChecker freshness,
     IndexOptions options,
-    ILogger<IndexCoordinator> logger)
+    ILogger<IndexCoordinator> logger,
+    EmbeddingService? embeddings = null)
 {
+    private const int InlineEmbeddingBudget = 200;
+
     private readonly ConcurrentDictionary<string, Task<IndexRunResult>> _background = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
 
     public IndexOptions Options => options;
+
+    public EmbeddingService? Embeddings => embeddings;
 
     public Task<IKnowledgeStore> StoreAsync(CancellationToken cancellationToken) => initializer.StoreAsync(cancellationToken);
 
@@ -101,7 +108,21 @@ public sealed class IndexCoordinator(
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await indexer.RunAsync(identity, force, onlyPaths, cancellationToken).ConfigureAwait(false);
+            var result = await indexer.RunAsync(identity, force, onlyPaths, cancellationToken).ConfigureAwait(false);
+            if (result.Completed && embeddings is not null)
+            {
+                // Semantic layer is best-effort: a slow or offline model must never fail indexing.
+                try
+                {
+                    await embeddings.EmbedPendingAsync(identity.RepoId, InlineEmbeddingBudget, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogWarning(ex, "Embedding after indexing {Root} failed", identity.Root);
+                }
+            }
+
+            return result;
         }
         finally
         {
@@ -166,9 +187,14 @@ public sealed class IndexCoordinator(
     {
         var store = await StoreAsync(cancellationToken).ConfigureAwait(false);
         RepositoryRow? row;
+        EmbeddingStatus? embeddingStatus = null;
         await using (var connection = await store.OpenAsync(cancellationToken).ConfigureAwait(false))
         {
             row = await repository.GetRepositoryAsync(connection, identity.RepoId, cancellationToken).ConfigureAwait(false);
+            if (embeddings is not null)
+            {
+                embeddingStatus = await embeddings.StatusAsync(connection, identity.RepoId, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         var current = await freshness.CheckAsync(identity, cancellationToken).ConfigureAwait(false);
@@ -187,6 +213,7 @@ public sealed class IndexCoordinator(
             row?.LastError,
             holder,
             IsBackgroundRunning(identity.RepoId),
-            current);
+            current,
+            embeddingStatus);
     }
 }

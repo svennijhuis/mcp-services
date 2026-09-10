@@ -172,9 +172,12 @@ public sealed class IndexTools(IndexCoordinator coordinator, IndexRepository rep
         var exact = await search.ExactSymbolsAsync(connection, identity.RepoId, query.Trim(), filters, Math.Min(max, 10), cancellationToken).ConfigureAwait(false);
         var symbols = await search.SearchSymbolsAsync(connection, identity.RepoId, query, filters, max * 2, cancellationToken).ConfigureAwait(false);
         var chunks = await search.SearchChunksAsync(connection, identity.RepoId, query, filters, max * 2, cancellationToken).ConfigureAwait(false);
-        var (queryId, hits) = await search.FuseAsync(connection, identity.RepoId, query, exact, symbols, chunks, null, max, cancellationToken).ConfigureAwait(false);
+        var vectorHits = coordinator.Embeddings is { } embeddings
+            ? await embeddings.SearchAsync(connection, identity.RepoId, query, filters, max * 2, cancellationToken).ConfigureAwait(false)
+            : null;
+        var (queryId, hits) = await search.FuseAsync(connection, identity.RepoId, query, exact, symbols, chunks, vectorHits, max, cancellationToken).ConfigureAwait(false);
 
-        return new { queryId, repoId = identity.RepoId, total = hits.Count, hits, freshness };
+        return new { queryId, repoId = identity.RepoId, total = hits.Count, hits, semantic = vectorHits is { Count: > 0 }, freshness };
     }
 
     [McpServerTool(Name = "search_symbols", ReadOnly = true, Idempotent = true, OpenWorld = false, Title = "Search symbols")]

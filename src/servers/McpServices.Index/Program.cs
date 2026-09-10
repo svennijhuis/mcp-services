@@ -1,9 +1,11 @@
 using McpServices.Hosting;
 using McpServices.Index;
+using McpServices.Index.Embeddings;
 using McpServices.Index.Indexing;
 using McpServices.Index.Search;
 using McpServices.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 var descriptor = new ServerDescriptor("mcp-index", "Learning codebase index: incremental symbol and full-text indexing, hybrid search with feedback, notes with staleness detection, and freshness tracking against git.")
 {
@@ -20,7 +22,9 @@ var descriptor = new ServerDescriptor("mcp-index", "Learning codebase index: inc
           --auto-refresh <mode>     inline (default): refresh small deltas before answering; background: answer now, refresh later; off.
           --inline-max-files <n>    Largest delta refreshed inline (default 200).
           --max-file-kb <n>         Skip files larger than this (default 512).
-          --embeddings <spec>       Optional embedding model for semantic search, e.g. ollama:nomic-embed-text or openai:text-embedding-3-small.
+          --embeddings <spec>       Optional embedding model for semantic search: ollama:<model>[@url] or openai:<model>[@url]
+                                    (OPENAI_API_KEY / MCP_INDEX_EMBEDDINGS_URL from the environment); env MCP_INDEX_EMBEDDINGS.
+          --watch                   Watch the configured roots and refresh in the background on file changes.
         """,
 };
 
@@ -36,10 +40,27 @@ return await McpServerHost.RunAsync(args, descriptor, context =>
     context.Expose("autoRefresh", options.AutoRefresh.ToString().ToLowerInvariant());
     context.Expose("inlineMaxFiles", options.InlineMaxFiles);
     context.Expose("git", McpServices.Index.Git.GitCli.IsAvailable);
+    context.Expose("embeddings", options.Embeddings ?? "off");
+    context.Expose("watch", options.Watch);
 
     var store = KnowledgeStoreFactory.Resolve(context, "mcp-index", "index.db");
     context.AddKnowledgeStore(store, IndexSchema.Migrations);
     context.Services.AddSingleton(options);
+    if (options.Embeddings is not null)
+    {
+        var (generator, fingerprint) = EmbeddingProviders.Create(options.Embeddings);
+        context.Services.AddSingleton(sp => new EmbeddingService(
+            sp.GetRequiredService<IKnowledgeStore>(),
+            generator,
+            fingerprint,
+            sp.GetRequiredService<ILogger<EmbeddingService>>()));
+    }
+
+    if (options.Watch)
+    {
+        context.Services.AddHostedService<IndexWatcher>();
+    }
+
     context.Services.AddSingleton<IndexRepository>();
     context.Services.AddSingleton<Indexer>();
     context.Services.AddSingleton<FreshnessChecker>();
