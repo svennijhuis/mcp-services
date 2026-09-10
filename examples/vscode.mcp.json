@@ -1,0 +1,38 @@
+{
+  "$comment": "VS Code (GitHub Copilot agent mode): save as .vscode/mcp.json. VS Code uses 'servers' instead of 'mcpServers' and supports input prompts for secrets.",
+  "inputs": [
+    {
+      "id": "db-connection",
+      "type": "promptString",
+      "description": "Connection string for the 'app' database (provider:connection)",
+      "password": true
+    }
+  ],
+  "servers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "mcp-filesystem",
+      "args": ["${workspaceFolder}"]
+    },
+    "database": {
+      "type": "stdio",
+      "command": "mcp-database",
+      "args": ["--db", "app=${input:db-connection}"]
+    },
+    "roslyn": {
+      "type": "stdio",
+      "command": "mcp-roslyn",
+      "args": ["--root", "${workspaceFolder}", "--restrict"]
+    },
+    "index": {
+      "type": "stdio",
+      "command": "mcp-index",
+      "args": ["--root", "${workspaceFolder}", "--watch"]
+    },
+    "learnings": {
+      "type": "stdio",
+      "command": "mcp-learnings",
+      "args": ["--repo", "owner/name"]
+    }
+  }
+}

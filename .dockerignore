@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/TestResults/
+artifacts/
+nupkg/
+.git/
+.vs/
+.idea/
+*.db
+*.db-wal
+*.db-shm

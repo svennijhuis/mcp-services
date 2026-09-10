@@ -1,0 +1,26 @@
+{
+  "$comment": "Claude Desktop: merge into claude_desktop_config.json (macOS: ~/Library/Application Support/Claude/, Windows: %APPDATA%\\Claude\\). Claude Desktop does not inherit your shell PATH, so use the full path of the tool shim (~/.dotnet/tools/<name>) or of a published single-file binary (scripts/publish.sh).",
+  "mcpServers": {
+    "filesystem": {
+      "command": "/Users/you/.dotnet/tools/mcp-filesystem",
+      "args": ["/Users/you/src", "/Users/you/Documents/notes"]
+    },
+    "database": {
+      "command": "/Users/you/.dotnet/tools/mcp-database",
+      "args": ["--db", "app=sqlite:/Users/you/src/app/app.db", "--db", "warehouse=postgres:Host=localhost;Database=warehouse;Username=reader;Password=secret", "--read-only"]
+    },
+    "roslyn": {
+      "command": "/Users/you/.dotnet/tools/mcp-roslyn",
+      "args": ["--root", "/Users/you/src/my-solution", "--no-scripting"],
+      "env": { "DOTNET_ROOT": "/usr/local/share/dotnet" }
+    },
+    "index": {
+      "command": "/Users/you/.dotnet/tools/mcp-index",
+      "args": ["--root", "/Users/you/src/my-solution", "--embeddings", "ollama:nomic-embed-text"]
+    },
+    "learnings": {
+      "command": "/Users/you/.dotnet/tools/mcp-learnings",
+      "args": ["--repo", "owner/name"]
+    }
+  }
+}

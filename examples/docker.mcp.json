@@ -1,0 +1,10 @@
+{
+  "$comment": "Remote/HTTP variant for the docker-compose stack in ../docker. Any client that speaks Streamable HTTP (Cursor, VS Code, remote bots) can connect; the index and learnings servers share the PostgreSQL store, so every agent learns from the same data.",
+  "mcpServers": {
+    "index": { "url": "http://localhost:5103/mcp" },
+    "learnings": { "url": "http://localhost:5104/mcp" },
+    "database": { "url": "http://localhost:5102/mcp" },
+    "roslyn": { "url": "http://localhost:5101/mcp" },
+    "filesystem": { "url": "http://localhost:5100/mcp" }
+  }
+}

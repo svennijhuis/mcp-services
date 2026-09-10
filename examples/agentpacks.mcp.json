@@ -1,0 +1,32 @@
+{
+  "$comment": "Agent Plugins 1.0.0 schema as used by svennijhuis/agentPacks: 'command' is a bare executable token resolved on PATH and 'env' never carries credentials. Install the tools first (scripts/install-tools.sh) so mcp-* is on PATH. CURSOR_API_KEY, OPENAI_API_KEY and database passwords come from the process environment, not from this file.",
+  "mcpServers": {
+    "mcp-filesystem": {
+      "command": "mcp-filesystem",
+      "args": ["${workspaceFolder}"]
+    },
+    "mcp-database": {
+      "command": "mcp-database",
+      "args": ["--read-only"],
+      "env": {
+        "MCP_DB__app": "sqlite:${workspaceFolder}/app.db"
+      }
+    },
+    "mcp-roslyn": {
+      "command": "mcp-roslyn",
+      "args": ["--root", "${workspaceFolder}", "--restrict", "--no-scripting"]
+    },
+    "mcp-index": {
+      "command": "mcp-index",
+      "args": ["--root", "${workspaceFolder}", "--restrict", "--auto-refresh", "inline"]
+    },
+    "mcp-learnings": {
+      "command": "mcp-learnings",
+      "args": ["--dispatch", "manual", "--dispatch-mode", "dry-run"],
+      "env": {
+        "MCP_LEARNINGS_REPO": "svennijhuis/agentPacks",
+        "MCP_LEARNINGS_TARGET_REPOS": "svennijhuis/agentPacks,svennijhuis/mcp-services"
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# mcp-roslyn loads MSBuild from an installed .NET SDK at runtime (MSBuildLocator) and shells out to
+# `dotnet build`/`dotnet test`, so the runtime image is the SDK image.
+# Build from the repository root:
+#   docker build -f docker/Dockerfile.roslyn -t mcp-roslyn .
+ARG DOTNET_VERSION=10.0
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+WORKDIR /src
+COPY global.json Directory.Build.props Directory.Build.targets Directory.Packages.props McpServices.slnx ./
+COPY src ./src
+RUN dotnet restore src/servers/McpServices.Roslyn/McpServices.Roslyn.csproj \
+ && dotnet publish src/servers/McpServices.Roslyn/McpServices.Roslyn.csproj --configuration Release --no-restore --no-self-contained --output /app
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 10001 mcp
+WORKDIR /app
+COPY --from=build --chown=mcp:mcp /app ./
+ENV MCP_HOST=0.0.0.0 \
+    MCP_ROSLYN_ROOT=/workspace \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    NUGET_PACKAGES=/home/mcp/.nuget/packages
+RUN mkdir -p /workspace && chown mcp:mcp /workspace
+VOLUME ["/workspace", "/home/mcp/.nuget/packages"]
+USER mcp
+EXPOSE 5100
+ENTRYPOINT ["dotnet", "/app/McpServices.Roslyn.dll"]
+# Mount the solution at /workspace. Scripting is off by default in containers; drop --no-scripting to enable it.
+CMD ["--http", "--port", "5100", "--root", "/workspace", "--restrict", "--no-scripting"]

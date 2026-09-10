@@ -1,0 +1,25 @@
+{
+  "$comment": "Cursor: put this in .cursor/mcp.json (project) or ~/.cursor/mcp.json (global). Commands assume the servers are installed as .NET global tools (scripts/install-tools.sh) and ~/.dotnet/tools is on PATH. Replace ${workspaceFolder} with an absolute path if your client does not expand it.",
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcp-filesystem",
+      "args": ["${workspaceFolder}"]
+    },
+    "database": {
+      "command": "mcp-database",
+      "args": ["--db", "app=sqlite:${workspaceFolder}/app.db", "--read-only"]
+    },
+    "roslyn": {
+      "command": "mcp-roslyn",
+      "args": ["--root", "${workspaceFolder}", "--restrict"]
+    },
+    "index": {
+      "command": "mcp-index",
+      "args": ["--root", "${workspaceFolder}", "--auto-refresh", "inline", "--watch"]
+    },
+    "learnings": {
+      "command": "mcp-learnings",
+      "args": ["--repo", "owner/name", "--dispatch", "manual"]
+    }
+  }
+}

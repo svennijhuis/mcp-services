@@ -1,0 +1,134 @@
+# Full local stack: PostgreSQL + pgvector as the shared knowledge store, and every server over Streamable HTTP.
+#
+#   cd docker && docker compose up -d --build
+#   curl -s http://localhost:5103/mcp -X POST -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+#        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+#
+# Point clients at the URLs in ../examples/docker.mcp.json. Set WORKSPACE to the directory you want the
+# filesystem/roslyn/index servers to see (default: the parent of this repository).
+#
+# Secrets (CURSOR_API_KEY, OPENAI_API_KEY, POSTGRES_PASSWORD) are read from your shell or a local .env file
+# next to this compose file — never commit them.
+
+name: mcp-services
+
+x-common: &common
+  restart: unless-stopped
+  init: true
+  environment: &common-env
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mcp
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcp}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+
+  filesystem:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        SERVER: McpServices.FileSystem
+    image: mcp-filesystem:local
+    command: ["--http", "--port", "5100", "/workspace"]
+    volumes:
+      - ${WORKSPACE:-..}:/workspace
+    ports:
+      - "127.0.0.1:5100:5100"
+
+  roslyn:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.roslyn
+    image: mcp-roslyn:local
+    command: ["--http", "--port", "5100", "--root", "/workspace", "--restrict", "--no-scripting"]
+    volumes:
+      - ${WORKSPACE:-..}:/workspace
+      - nuget-cache:/home/mcp/.nuget/packages
+    ports:
+      - "127.0.0.1:5101:5100"
+
+  database:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        SERVER: McpServices.Database
+    image: mcp-database:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      # Exposes the shared store itself as a queryable database; add your own with more MCP_DB__<alias> entries.
+      MCP_DB__mcp: "postgres:Host=postgres;Database=mcp;Username=mcp;Password=${POSTGRES_PASSWORD:-mcp}"
+      MCP_DB_READ_ONLY: "true"
+    ports:
+      - "127.0.0.1:5102:5100"
+
+  index:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        SERVER: McpServices.Index
+    image: mcp-index:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      MCP_INDEX_STORE: "postgres:Host=postgres;Database=mcp;Username=mcp;Password=${POSTGRES_PASSWORD:-mcp}"
+      # Optional semantic search, e.g. "openai:text-embedding-3-small" (needs OPENAI_API_KEY) or "ollama:nomic-embed-text@http://host.docker.internal:11434".
+      MCP_INDEX_EMBEDDINGS: ${MCP_INDEX_EMBEDDINGS:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: ["--http", "--port", "5100", "--root", "/workspace", "--restrict", "--watch", "--auto-refresh", "background"]
+    volumes:
+      - ${WORKSPACE:-..}:/workspace
+    ports:
+      - "127.0.0.1:5103:5100"
+
+  learnings:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        SERVER: McpServices.Learnings
+    image: mcp-learnings:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      MCP_LEARNINGS_STORE: "postgres:Host=postgres;Database=mcp;Username=mcp;Password=${POSTGRES_PASSWORD:-mcp}"
+      MCP_LEARNINGS_REPO: ${MCP_LEARNINGS_REPO:-owner/name}
+      MCP_LEARNINGS_TARGET_REPOS: ${MCP_LEARNINGS_TARGET_REPOS:-}
+      MCP_LEARNINGS_DISPATCH: ${MCP_LEARNINGS_DISPATCH:-manual}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+    volumes:
+      - learnings-data:/data
+    ports:
+      - "127.0.0.1:5104:5100"
+
+volumes:
+  postgres-data:
+  learnings-data:
+  nuget-cache:
