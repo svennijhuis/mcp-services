@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsServerProject>true</IsServerProject>
+    <AssemblyName>McpServices.Learnings</AssemblyName>
+    <RootNamespace>McpServices.Learnings</RootNamespace>
+    <ToolCommandName>mcp-learnings</ToolCommandName>
+    <PackageId>McpServices.Learnings</PackageId>
+    <Description>Self-learning MCP server: agents record what worked and what did not, the server deduplicates, decays and aggregates that into recommendations, and turns corroborated learnings into improvement proposals dispatched to Cursor as draft pull requests.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+    <ProjectReference Include="../../shared/McpServices.Storage/McpServices.Storage.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" />
+  </ItemGroup>
+
+</Project>
