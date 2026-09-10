@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsServerProject>true</IsServerProject>
+    <AssemblyName>McpServices.Roslyn</AssemblyName>
+    <RootNamespace>McpServices.Roslyn</RootNamespace>
+    <ToolCommandName>mcp-roslyn</ToolCommandName>
+    <PackageId>McpServices.Roslyn</PackageId>
+    <Description>MCP server for C#/.NET codebases powered by Roslyn: load solutions and projects, navigate symbols (definitions, references, implementations, callers, call graphs, type hierarchies), diagnostics and metrics, refactorings with preview, snippet analysis, scripting, build and test.</Description>
+    <!-- MSBuildWorkspace loads the MSBuild assemblies of the installed SDK at runtime through MSBuildLocator. -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Locator" />
+    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
+  </ItemGroup>
+
+</Project>

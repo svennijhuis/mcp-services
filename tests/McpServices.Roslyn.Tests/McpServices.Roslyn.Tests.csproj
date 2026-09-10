@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/servers/McpServices.Roslyn/McpServices.Roslyn.csproj" />
+    <ProjectReference Include="../McpServices.TestSupport/McpServices.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The sample solution is copied next to the tests and then into a temp directory per test class. -->
+    <None Include="../fixtures/SampleSolution/**" Exclude="../fixtures/SampleSolution/**/bin/**;../fixtures/SampleSolution/**/obj/**" CopyToOutputDirectory="PreserveNewest" LinkBase="fixtures/SampleSolution" />
+  </ItemGroup>
+
+</Project>
