@@ -61,6 +61,35 @@ Point any MCP-compatible host at the built entrypoint:
 }
 ```
 
+## Testing with the Cursor CLI
+
+The repo ships a project-level MCP config (`.cursor/mcp.json`) that registers
+this server with Cursor (editor and CLI). To exercise it with the
+[Cursor CLI](https://cursor.com/docs/cli/using):
+
+```bash
+# 1. Install the CLI (macOS, Linux, WSL)
+curl https://cursor.com/install -fsS | bash
+export PATH="$HOME/.local/bin:$PATH"
+
+# 2. Build the server (mcp.json launches dist/index.js)
+npm run build
+
+# 3. Approve and inspect the server (no login required)
+agent mcp enable mcp-services
+agent mcp list                      # -> mcp-services: ready
+agent mcp list-tools mcp-services   # -> add (a, b), echo (message), now ()
+
+# 4. Drive it with the agent (requires auth: CURSOR_API_KEY or `agent login`)
+export CURSOR_API_KEY=your_api_key_here
+agent -p "Use the mcp-services 'add' tool to add 21 and 21, then reply with only the number." --force
+```
+
+Steps 1–3 verify that the CLI can launch the server and complete the MCP
+handshake. Step 4 has the agent's model actually call a tool, which needs an
+authenticated CLI. In a headless environment (no browser for `agent login`),
+set `CURSOR_API_KEY`.
+
 ## Scripts
 
 | Script              | Purpose                                             |
