@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsServerProject>true</IsServerProject>
+    <AssemblyName>McpServices.Database</AssemblyName>
+    <RootNamespace>McpServices.Database</RootNamespace>
+    <ToolCommandName>mcp-database</ToolCommandName>
+    <PackageId>McpServices.Database</PackageId>
+    <Description>MCP server for SQL databases (SQLite, PostgreSQL, SQL Server): schema discovery, guarded read queries, optional writes, explain and export.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+</Project>

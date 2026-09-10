@@ -19,7 +19,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.1.0</Version>
     <!-- CA1848/CA2254: LoggerMessage delegates and templated logging are noise for a small server; CA1031 is intentional at tool boundaries. -->
-    <NoWarn>$(NoWarn);CA1848;CA2254;CA1031;CA1054;CA1056;CA1062;CA1303;CA1305;CA1307;CA1308;CA1310;CA1707;CA1812;CA1822;CA1859;CA1861;CA1863;CA1873;CA2007;CA5394;IDE0130</NoWarn>
+    <NoWarn>$(NoWarn);CA1848;CA2254;CA1031;CA1054;CA1056;CA1062;CA1303;CA1305;CA1307;CA1308;CA1310;CA1707;CA1716;CA1812;CA1822;CA1859;CA1861;CA1863;CA1873;CA2007;CA5394;IDE0130</NoWarn>
   </PropertyGroup>
 
 </Project>

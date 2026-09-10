@@ -38,7 +38,7 @@ public static class McpServerHost
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(configure);
 
-        var commandLine = CommandLine.Parse(args, SharedFlags);
+        var commandLine = CommandLine.Parse(args, [.. SharedFlags, .. descriptor.Flags]);
         if (commandLine.HasFlag("version"))
         {
             Console.Out.WriteLine($"{descriptor.Name} {descriptor.Version}");

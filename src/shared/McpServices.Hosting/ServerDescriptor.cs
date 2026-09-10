@@ -13,6 +13,12 @@ public sealed record ServerDescriptor(string Name, string Description)
     /// <summary>Short usage text printed for <c>--help</c>, after the shared transport options.</summary>
     public string? Usage { get; init; }
 
+    /// <summary>
+    /// Server-specific boolean flags (without <c>--</c>). Declaring them prevents the parser from
+    /// swallowing the following argument as the flag's value.
+    /// </summary>
+    public IReadOnlyList<string> Flags { get; init; } = [];
+
     private static string ResolveVersion()
     {
         var assembly = Assembly.GetEntryAssembly() ?? typeof(ServerDescriptor).Assembly;
