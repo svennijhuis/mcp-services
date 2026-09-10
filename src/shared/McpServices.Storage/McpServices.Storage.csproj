@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Shared knowledge storage for mcp-index and mcp-learnings: SQLite (WAL, FTS5) or PostgreSQL (pgvector, tsvector) behind one IKnowledgeStore, with migrations, writer locks, RRF fusion and secret redaction.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../McpServices.Hosting/McpServices.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Pgvector" />
+    <PackageReference Include="System.IO.Hashing" />
+  </ItemGroup>
+
+</Project>

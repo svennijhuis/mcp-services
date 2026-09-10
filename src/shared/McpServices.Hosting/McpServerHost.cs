@@ -151,4 +151,4 @@ public static class McpServerHost
 }
 
 /// <summary>Thrown during <see cref="McpServerHost.RunAsync"/> configuration for user-facing startup errors (bad arguments, missing config).</summary>
-public sealed class ServerStartupException(string message) : Exception(message);
+public sealed class ServerStartupException(string message, Exception? innerException = null) : Exception(message, innerException);

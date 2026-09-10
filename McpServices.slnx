@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Folder Name="/src/shared/">
       <Project Path="src/shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+      <Project Path="src/shared/McpServices.Storage/McpServices.Storage.csproj" />
     </Folder>
     <Folder Name="/src/servers/">
       <Project Path="src/servers/McpServices.FileSystem/McpServices.FileSystem.csproj" />
@@ -13,5 +14,6 @@
     <Project Path="tests/McpServices.Hosting.Tests/McpServices.Hosting.Tests.csproj" />
     <Project Path="tests/McpServices.FileSystem.Tests/McpServices.FileSystem.Tests.csproj" />
     <Project Path="tests/McpServices.Database.Tests/McpServices.Database.Tests.csproj" />
+    <Project Path="tests/McpServices.Storage.Tests/McpServices.Storage.Tests.csproj" />
   </Folder>
 </Solution>
