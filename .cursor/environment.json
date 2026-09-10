@@ -1,0 +1,10 @@
+{
+  "name": "mcp-services",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "mcp-server",
+      "command": "npm run dev"
+    }
+  ]
+}
