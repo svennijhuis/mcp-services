@@ -53,14 +53,16 @@ public class SqlDialectTests
     [Fact]
     public void Sqlite_full_text_query_quotes_terms_and_prefixes_last()
     {
-        Assert.Equal("\"order\" AND \"service\" AND \"submit\"*", SqlDialect.Sqlite.FullTextQuery("Order service: submit*"));
+        Assert.Equal("\"order\" OR \"service\" OR \"submit\"*", SqlDialect.Sqlite.FullTextQuery("Order service: submit*"));
+        Assert.Equal("\"orders\" OR \"submitted\"*", SqlDialect.Sqlite.FullTextQuery("where are orders submitted"));
+        Assert.Equal("\"the\"*", SqlDialect.Sqlite.FullTextQuery("the"));
         Assert.Equal("\"\"", SqlDialect.Sqlite.FullTextQuery("  ***  "));
     }
 
     [Fact]
     public void Postgres_full_text_query_uses_tsquery_syntax()
     {
-        Assert.Equal("order & service & submit:*", SqlDialect.Postgres.FullTextQuery("Order service submit"));
+        Assert.Equal("order | service | submit:*", SqlDialect.Postgres.FullTextQuery("Order service submit"));
         Assert.Equal(string.Empty, SqlDialect.Postgres.FullTextQuery("!!"));
     }
 

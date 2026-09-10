@@ -7,6 +7,7 @@
     <Folder Name="/src/servers/">
       <Project Path="src/servers/McpServices.FileSystem/McpServices.FileSystem.csproj" />
       <Project Path="src/servers/McpServices.Database/McpServices.Database.csproj" />
+      <Project Path="src/servers/McpServices.Index/McpServices.Index.csproj" />
     </Folder>
   </Folder>
   <Folder Name="/tests/">
@@ -15,5 +16,6 @@
     <Project Path="tests/McpServices.FileSystem.Tests/McpServices.FileSystem.Tests.csproj" />
     <Project Path="tests/McpServices.Database.Tests/McpServices.Database.Tests.csproj" />
     <Project Path="tests/McpServices.Storage.Tests/McpServices.Storage.Tests.csproj" />
+    <Project Path="tests/McpServices.Index.Tests/McpServices.Index.Tests.csproj" />
   </Folder>
 </Solution>

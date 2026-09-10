@@ -35,7 +35,8 @@ public abstract partial class SqlDialect
 
     /// <summary>
     /// Turns free text into an engine query string for full-text search: SQLite FTS5 MATCH syntax
-    /// or a <c>websearch_to_tsquery</c>-safe string. Prefix matching is applied to the last term.
+    /// or a <c>to_tsquery</c> string. Terms are OR-ed (ranking rewards multiple matches) and the last
+    /// term is prefix-matched so partially typed identifiers still hit.
     /// </summary>
     public abstract string FullTextQuery(string userQuery);
 
@@ -68,8 +69,21 @@ public abstract partial class SqlDialect
         return sb.ToString().TrimEnd();
     }
 
-    protected static IReadOnlyList<string> Terms(string userQuery) =>
-        TokenRegex().Matches(userQuery ?? string.Empty).Select(m => m.Value.ToLowerInvariant()).Where(t => t.Length > 0).Distinct().ToList();
+    private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
+    {
+        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "do", "does", "did", "have", "has", "had",
+        "where", "what", "which", "who", "whom", "how", "when", "why", "in", "on", "of", "to", "for", "and", "or", "not",
+        "with", "by", "at", "from", "this", "that", "these", "those", "it", "its", "as", "i", "we", "you", "my", "our", "your",
+        "can", "could", "should", "would", "will", "into", "about", "there", "here", "any", "some", "all", "me", "us", "them",
+    };
+
+    /// <summary>Lower-cased query terms without stop words; if everything was a stop word, keep the original terms.</summary>
+    protected static IReadOnlyList<string> Terms(string userQuery)
+    {
+        var all = TokenRegex().Matches(userQuery ?? string.Empty).Select(m => m.Value.ToLowerInvariant()).Where(t => t.Length > 0).Distinct().ToList();
+        var meaningful = all.Where(t => !StopWords.Contains(t)).ToList();
+        return meaningful.Count > 0 ? meaningful : all;
+    }
 
     [GeneratedRegex(@"[\p{L}\p{N}_]+")]
     private static partial Regex TokenRegex();
@@ -98,8 +112,9 @@ public abstract partial class SqlDialect
             }
 
             // Quote every term so FTS5 operators in user input (AND, OR, NOT, *, :) cannot break the query.
+            // Terms are OR-ed: bm25 ranks rows matching more terms higher, and natural-language queries still hit.
             var quoted = terms.Select((t, i) => i == terms.Count - 1 ? $"\"{t}\"*" : $"\"{t}\"");
-            return string.Join(" AND ", quoted);
+            return string.Join(" OR ", quoted);
         }
     }
 
@@ -117,14 +132,14 @@ public abstract partial class SqlDialect
 
         public override string FullTextQuery(string userQuery)
         {
-            // Consumed by to_tsquery: "a & b & c:*".
+            // Consumed by to_tsquery: "a | b | c:*".
             var terms = Terms(userQuery);
             if (terms.Count == 0)
             {
                 return string.Empty;
             }
 
-            return string.Join(" & ", terms.Select((t, i) => i == terms.Count - 1 ? $"{t}:*" : t));
+            return string.Join(" | ", terms.Select((t, i) => i == terms.Count - 1 ? $"{t}:*" : t));
         }
     }
 }

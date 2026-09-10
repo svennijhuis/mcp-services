@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# mcp-index: refresh the code index after checkout/switch (branch switches change many files at once).
+# $3 == 1 means a branch checkout (not a file checkout).
+[ "$3" = "1" ] || exit 0
+exec "$(dirname "$0")/mcp-index-refresh"

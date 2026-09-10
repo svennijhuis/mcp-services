@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsServerProject>true</IsServerProject>
+    <AssemblyName>McpServices.Index</AssemblyName>
+    <RootNamespace>McpServices.Index</RootNamespace>
+    <ToolCommandName>mcp-index</ToolCommandName>
+    <PackageId>McpServices.Index</PackageId>
+    <Description>MCP server that keeps a learning, incremental index of a codebase: symbols, full-text and hybrid search, notes, feedback-driven ranking and freshness tracking, with a CLI mode for git hooks.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+    <ProjectReference Include="../../shared/McpServices.Storage/McpServices.Storage.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+  </ItemGroup>
+
+</Project>

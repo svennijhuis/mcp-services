@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+# Shared body for the mcp-index git hooks: refresh the code index for this checkout in the
+# background so MCP clients (Cursor, Claude, VS Code) always start from a warm index, even when
+# files changed outside of any MCP session (checkout, merge, rebase, IDE saves).
+#
+# Install: copy post-checkout, post-merge and post-commit from this folder into .git/hooks/
+# (or run scripts/install-git-hooks.sh) and make sure `mcp-index` is on PATH
+# (`dotnet tool install -g McpServices.Index` or scripts/install-tools.sh).
+#
+# Environment:
+#   MCP_INDEX_STORE   override the store (default ~/.mcp-services/mcp-index/index.db)
+#   MCP_INDEX_HOOKS   set to "off" to disable without removing the hooks
+
+if [ "${MCP_INDEX_HOOKS:-on}" = "off" ]; then
+  exit 0
+fi
+
+if ! command -v mcp-index >/dev/null 2>&1; then
+  exit 0
+fi
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+
+# Never block git; the server and CLI share a writer lock, so a concurrent run simply skips.
+( mcp-index index "$root" --quiet >/dev/null 2>&1 & ) 2>/dev/null
+exit 0

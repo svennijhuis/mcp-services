@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# mcp-index: refresh the code index after a commit so HEAD in the index matches the repository.
+exec "$(dirname "$0")/mcp-index-refresh"

@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# mcp-index: refresh the code index after merge/pull.
+exec "$(dirname "$0")/mcp-index-refresh"
