@@ -1,32 +1,32 @@
 {
-  "$comment": "Agent Plugins 1.0.0 schema as used by svennijhuis/agentPacks: 'command' is a bare executable token resolved on PATH and 'env' never carries credentials. Install the tools first (scripts/install-tools.sh) so mcp-* is on PATH. CURSOR_API_KEY, OPENAI_API_KEY and database passwords come from the process environment, not from this file.",
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
-    "mcp-filesystem": {
+    "filesystem": {
+      "type": "stdio",
       "command": "mcp-filesystem",
-      "args": ["${workspaceFolder}"]
+      "args": ["${PLUGIN_DATA}/workspace"]
     },
-    "mcp-database": {
+    "database": {
+      "type": "stdio",
       "command": "mcp-database",
-      "args": ["--read-only"],
-      "env": {
-        "MCP_DB__app": "sqlite:${workspaceFolder}/app.db"
-      }
+      "args": ["--db", "main=sqlite:${PLUGIN_DATA}/main.db", "--read-only"]
     },
-    "mcp-roslyn": {
+    "roslyn": {
+      "type": "stdio",
       "command": "mcp-roslyn",
-      "args": ["--root", "${workspaceFolder}", "--restrict", "--no-scripting"]
+      "args": ["--no-scripting"],
+      "env": { "MCP_ROSLYN_ROOT": "${PLUGIN_DATA}" }
     },
-    "mcp-index": {
+    "index": {
+      "type": "stdio",
       "command": "mcp-index",
-      "args": ["--root", "${workspaceFolder}", "--restrict", "--auto-refresh", "inline"]
+      "args": ["--store", "sqlite:${PLUGIN_DATA}/index/index.db", "--auto-refresh", "inline"]
     },
-    "mcp-learnings": {
+    "learnings": {
+      "type": "stdio",
       "command": "mcp-learnings",
-      "args": ["--dispatch", "manual", "--dispatch-mode", "dry-run"],
-      "env": {
-        "MCP_LEARNINGS_REPO": "svennijhuis/agentPacks",
-        "MCP_LEARNINGS_TARGET_REPOS": "svennijhuis/agentPacks,svennijhuis/mcp-services"
-      }
+      "args": ["--store", "sqlite:${PLUGIN_DATA}/learnings/learnings.db", "--data-dir", "${PLUGIN_DATA}/learnings", "--dispatch", "manual"],
+      "env": { "MCP_LEARNINGS_REPO": "svennijhuis/agentPacks" }
     }
   }
 }
