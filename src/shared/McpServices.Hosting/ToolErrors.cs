@@ -45,4 +45,11 @@ public static class ToolGuard
 
         throw new ToolException($"Parameter '{parameterName}' must be one of: {string.Join(", ", Enum.GetNames<T>().Select(n => n.ToLowerInvariant()))}.");
     }
+
+    /// <summary>Validates a free-form string against an allowed set (case-insensitive) and returns it lower-cased.</summary>
+    public static string OneOf(string? value, string parameterName, params string[] allowed)
+    {
+        var match = allowed.FirstOrDefault(a => a.Equals(value?.Trim(), StringComparison.OrdinalIgnoreCase));
+        return match ?? throw new ToolException($"Parameter '{parameterName}' must be one of: {string.Join(", ", allowed)} (was '{value}').");
+    }
 }

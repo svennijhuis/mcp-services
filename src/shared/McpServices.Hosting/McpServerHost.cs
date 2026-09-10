@@ -73,6 +73,10 @@ public static class McpServerHost
 
     private static async Task<int> RunStdioAsync(string[] args, CommandLine commandLine, ServerDescriptor descriptor, Action<HostContext> configure, LogLevel logLevel, CancellationToken cancellationToken)
     {
+        // The transport writes to the raw stdout stream; anything else that reaches Console.Out (a stray
+        // Console.WriteLine in a tool, a user script) would corrupt the protocol, so route it to stderr.
+        Console.SetOut(Console.Error);
+
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = args, DisableDefaults = true });
         builder.Configuration.AddEnvironmentVariables();
         ConfigureLogging(builder.Logging, logLevel);

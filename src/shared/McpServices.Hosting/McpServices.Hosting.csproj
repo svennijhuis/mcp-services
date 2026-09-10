@@ -12,6 +12,7 @@
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <PackageReference Include="DiffPlex" />
   </ItemGroup>
 
 </Project>
