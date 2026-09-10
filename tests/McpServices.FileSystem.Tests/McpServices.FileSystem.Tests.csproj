@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/servers/McpServices.FileSystem/McpServices.FileSystem.csproj" />
+    <ProjectReference Include="../McpServices.TestSupport/McpServices.TestSupport.csproj" />
+  </ItemGroup>
+
+</Project>

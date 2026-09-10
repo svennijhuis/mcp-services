@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Folder Name="/src/shared/">
+      <Project Path="src/shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+    </Folder>
+    <Folder Name="/src/servers/">
+      <Project Path="src/servers/McpServices.FileSystem/McpServices.FileSystem.csproj" />
+    </Folder>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/McpServices.TestSupport/McpServices.TestSupport.csproj" />
+    <Project Path="tests/McpServices.Hosting.Tests/McpServices.Hosting.Tests.csproj" />
+    <Project Path="tests/McpServices.FileSystem.Tests/McpServices.FileSystem.Tests.csproj" />
+  </Folder>
+</Solution>

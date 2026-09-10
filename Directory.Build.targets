@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- Evaluated after the project file, so IsServerProject set in a csproj is visible here. -->
+  <PropertyGroup Condition="'$(IsServerProject)' == 'true'">
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <RollForward>LatestMajor</RollForward>
+    <IsPackable>true</IsPackable>
+    <PublishRelease>true</PublishRelease>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <UserSecretsId>$(AssemblyName)</UserSecretsId>
+  </PropertyGroup>
+
+</Project>
