@@ -77,7 +77,7 @@ public sealed class IndexServerFixture : IAsyncLifetime
     {
         try
         {
-            var info = new ProcessStartInfo("git") { WorkingDirectory = Root, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            var info = new ProcessStartInfo("git") { WorkingDirectory = Root, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
             foreach (var a in args)
             {
                 info.ArgumentList.Add(a);
@@ -91,6 +91,7 @@ public sealed class IndexServerFixture : IAsyncLifetime
             }
 
             using var process = Process.Start(info)!;
+            process.StandardInput.Close();
             var drain = Task.WhenAll(process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
             await process.WaitForExitAsync();
             try

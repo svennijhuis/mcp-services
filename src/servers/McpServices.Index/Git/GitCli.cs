@@ -100,6 +100,7 @@ public sealed class GitCli
         var info = new ProcessStartInfo("git")
         {
             WorkingDirectory = workingDirectory,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -122,8 +123,10 @@ public sealed class GitCli
             info.Environment[key] = value;
         }
 
+        // Empty pager: "cat" is not on PATH on Windows and would hang. Closing stdin matters because
+        // the MCP server speaks stdio; git would otherwise inherit that pipe and wait for input.
         info.Environment["GIT_OPTIONAL_LOCKS"] = "0";
-        info.Environment["GIT_PAGER"] = "cat";
+        info.Environment["GIT_PAGER"] = string.Empty;
 
         using var process = new Process { StartInfo = info };
         try
@@ -134,6 +137,8 @@ public sealed class GitCli
         {
             return new GitResult(false, string.Empty, ex.Message);
         }
+
+        process.StandardInput.Close();
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(60));
@@ -172,6 +177,7 @@ public sealed class GitCli
         "-c", "core.fsmonitor=false",
         "-c", "core.useBuiltinFSMonitor=false",
         "-c", "maintenance.auto=false",
+        "-c", "core.pager=",
         "-c", "safe.directory=*",
     ];
 
@@ -182,6 +188,7 @@ public sealed class GitCli
         {
             var info = new ProcessStartInfo("git", "--version")
             {
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -197,6 +204,8 @@ public sealed class GitCli
             {
                 return false;
             }
+
+            process.StandardInput.Close();
 
             process.WaitForExit(5000);
             if (!process.HasExited)
