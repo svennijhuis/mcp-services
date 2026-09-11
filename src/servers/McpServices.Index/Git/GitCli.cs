@@ -117,8 +117,13 @@ public sealed class GitCli
             info.ArgumentList.Add(argument);
         }
 
+        foreach (var (key, value) in ProcessOutput.GitBackgroundHelpersOff)
+        {
+            info.Environment[key] = value;
+        }
+
         info.Environment["GIT_OPTIONAL_LOCKS"] = "0";
-        info.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        info.Environment["GIT_PAGER"] = "cat";
 
         using var process = new Process { StartInfo = info };
         try
@@ -167,6 +172,7 @@ public sealed class GitCli
         "-c", "core.fsmonitor=false",
         "-c", "core.useBuiltinFSMonitor=false",
         "-c", "maintenance.auto=false",
+        "-c", "safe.directory=*",
     ];
 
 
@@ -174,20 +180,39 @@ public sealed class GitCli
     {
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("git", "--version")
+            var info = new ProcessStartInfo("git", "--version")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-            });
+            };
+            foreach (var (key, value) in ProcessOutput.GitBackgroundHelpersOff)
+            {
+                info.Environment[key] = value;
+            }
+
+            using var process = Process.Start(info);
             if (process is null)
             {
                 return false;
             }
 
             process.WaitForExit(5000);
-            return process.HasExited && process.ExitCode == 0;
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                return false;
+            }
+
+            return process.ExitCode == 0;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {

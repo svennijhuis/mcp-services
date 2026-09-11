@@ -66,7 +66,11 @@ public sealed class IndexServerFixture : IAsyncLifetime
             await Git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "touch both");
         }
 
-        Server = await ServerFixture.StartAsync("McpServices.Index", ["--root", Root, "--store", $"sqlite:{StorePath}", "--log-level", "Warning"]);
+        var environment = McpServices.Hosting.ProcessOutput.GitBackgroundHelpersOff.ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
+        Server = await ServerFixture.StartAsync(
+            "McpServices.Index",
+            ["--root", Root, "--store", $"sqlite:{StorePath}", "--log-level", "Warning"],
+            environment);
     }
 
     public async Task<bool> Git(params string[] args)
