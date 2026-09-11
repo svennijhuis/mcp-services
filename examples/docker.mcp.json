@@ -1,10 +1,25 @@
 {
-  "$comment": "Remote/HTTP variant for the docker-compose stack in ../docker. Any client that speaks Streamable HTTP (Cursor, VS Code, remote bots) can connect; the index and learnings servers share the PostgreSQL store, so every agent learns from the same data.",
+  "$comment": "Remote/HTTP variant for the docker-compose stack in ../docker. Ports are loopback-only; copy docker/.env.example to docker/.env and set MCP_AUTH_TOKEN (required — containers bind 0.0.0.0). Substitute the same token in the Authorization headers below. Index and learnings share PostgreSQL, so every agent learns from the same data. For Grok Bot you still need a public HTTPS tunnel in front of these URLs (see grok-bot.md); localhost is unreachable from the bot.",
   "mcpServers": {
-    "index": { "url": "http://localhost:5103/mcp" },
-    "learnings": { "url": "http://localhost:5104/mcp" },
-    "database": { "url": "http://localhost:5102/mcp" },
-    "roslyn": { "url": "http://localhost:5101/mcp" },
-    "filesystem": { "url": "http://localhost:5100/mcp" }
+    "index": {
+      "url": "http://localhost:5103/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_AUTH_TOKEN}" }
+    },
+    "learnings": {
+      "url": "http://localhost:5104/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_AUTH_TOKEN}" }
+    },
+    "database": {
+      "url": "http://localhost:5102/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_AUTH_TOKEN}" }
+    },
+    "roslyn": {
+      "url": "http://localhost:5101/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_AUTH_TOKEN}" }
+    },
+    "filesystem": {
+      "url": "http://localhost:5100/mcp",
+      "headers": { "Authorization": "Bearer ${MCP_AUTH_TOKEN}" }
+    }
   }
 }

@@ -4,4 +4,8 @@
     <ProjectReference Include="../../src/shared/McpServices.Hosting/McpServices.Hosting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
 </Project>

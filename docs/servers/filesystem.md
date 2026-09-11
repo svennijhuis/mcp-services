@@ -13,7 +13,7 @@ mcp-filesystem [transport options] <allowed-dir> [<allowed-dir> ...]
 | Setting | How | Notes |
 | --- | --- | --- |
 | Allowed directories | positional args or `MCP_FS_ALLOWED_DIRS` | Path-separator delimited (`:` on Linux/macOS, `;` on Windows). Relative paths passed to tools resolve against the first allowed directory. |
-| Transport | `--http --port 5100 --host 127.0.0.1` | Default is stdio. `MCP_PORT`/`MCP_HOST` also work. |
+| Transport | `--http --port 5100 --host 127.0.0.1` | Default is stdio. `MCP_PORT`/`MCP_HOST` also work. Non-loopback `--host` requires `--auth-token` / `MCP_AUTH_TOKEN`. |
 
 Without any allowed directory the server starts but every tool call fails with a clear error, so a misconfiguration never turns into unrestricted access.
 

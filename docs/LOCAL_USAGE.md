@@ -57,6 +57,7 @@ Notes:
 
 ```bash
 cd docker
+cp .env.example .env                 # set MCP_AUTH_TOKEN (required)
 WORKSPACE=/abs/repo docker compose up -d --build
 ```
 
@@ -69,23 +70,30 @@ WORKSPACE=/abs/repo docker compose up -d --build
 | learnings | 5104 | PostgreSQL + pgvector |
 | postgres | 5432 (loopback) | named volume `postgres-data` |
 
-Clients connect with `{ "url": "http://localhost:5103/mcp" }` (see `examples/docker.mcp.json`). Ports are bound to `127.0.0.1`; put a reverse proxy with TLS and authentication in front before exposing anything beyond your machine, because the servers themselves have no authentication layer.
+Clients connect with `{ "url": "http://localhost:5103/mcp", "headers": { "Authorization": "Bearer …" } }` (see `examples/docker.mcp.json`). Ports are bound to `127.0.0.1`. Copy `docker/.env.example` to `docker/.env` and set `MCP_AUTH_TOKEN` — containers bind `0.0.0.0` inside the network, so the host refuses to start without a bearer token. A reverse proxy or tunnel with TLS is still required before anything beyond your machine can reach `/mcp`; a tunnel to loopback is public, so the token is the access control.
 
-Environment for compose (shell or a `.env` file next to `docker-compose.yml`, never committed): `POSTGRES_PASSWORD`, `CURSOR_API_KEY`, `OPENAI_API_KEY`, `MCP_INDEX_EMBEDDINGS`, `MCP_LEARNINGS_REPO`, `MCP_LEARNINGS_TARGET_REPOS`, `MCP_LEARNINGS_DISPATCH`.
+Environment for compose (shell or a `.env` file next to `docker-compose.yml`, never committed): `MCP_AUTH_TOKEN` (required), `POSTGRES_PASSWORD`, `CURSOR_API_KEY`, `OPENAI_API_KEY`, `MCP_INDEX_EMBEDDINGS`, `MCP_LEARNINGS_REPO`, `MCP_LEARNINGS_TARGET_REPOS`, `MCP_LEARNINGS_DISPATCH`, `MCP_PUBLIC_URL`, `MCP_ALLOWED_HOSTS`. See [docker/.env.example](../docker/.env.example). Grok Bot setup is in [examples/grok-bot.md](../examples/grok-bot.md).
 
 Single container over stdio (no compose): `docker run -i --rm -v /abs/repo:/workspace mcp-index:local --root /workspace`.
 
-Any server can also run over HTTP without Docker: `mcp-index --http --port 5103 --root .` (binds `127.0.0.1`; `--host 0.0.0.0` to expose).
+Any server can also run over HTTP without Docker: `mcp-index --http --port 5103 --root .` (binds `127.0.0.1`; `--host 0.0.0.0` to expose, which **requires** `--auth-token` / `MCP_AUTH_TOKEN`). Loopback without a token is for local clients only. Any public URL — including a Cloudflare/ngrok tunnel to `127.0.0.1` — must use a token; binding loopback is not a security boundary once a tunnel exists.
+
+`GET /health` and `GET /healthz` stay unauthenticated for probes. The MCP endpoint is only `/mcp`.
 
 ## Shared options
 
 Every server understands:
 
 ```
---http               Streamable HTTP instead of stdio
---port <n>           HTTP port (default 5100; env MCP_PORT)
---host <name>        HTTP bind address (default 127.0.0.1)
---log-level <level>  Trace|Debug|Information|Warning|Error
+--http                 Streamable HTTP instead of stdio
+--port <n>             HTTP port (default 5100; env MCP_PORT)
+--host <name>          HTTP bind address (default 127.0.0.1)
+--auth-token <token>   Require Authorization: Bearer on /mcp (env MCP_AUTH_TOKEN).
+                       Mandatory when --host is not loopback; mandatory for any public URL
+--public-url <url>     Advertised https:// origin (tunnel/proxy); env MCP_PUBLIC_URL
+--allowed-host <name>  Extra Host values (repeatable; env MCP_ALLOWED_HOSTS). Pass * for tunnels
+--cors-origin <origin> Opt-in browser CORS (repeatable; env MCP_CORS_ORIGINS). Off by default
+--log-level <level>    Trace|Debug|Information|Warning|Error
 --help, --version
 ```
 
@@ -99,9 +107,11 @@ SQLite stores and dry-run proposals live under `~/.mcp-services/<server>/` (`MCP
 
 | Client | File | Shape |
 |---|---|---|
-| Cursor | `.cursor/mcp.json` or `~/.cursor/mcp.json` | `mcpServers` → `command`/`args`/`env` or `url` |
+| Cursor | `.cursor/mcp.json` or `~/.cursor/mcp.json` | `mcpServers` → `command`/`args`/`env` or `url` + optional `headers` |
 | Claude Desktop | `claude_desktop_config.json` | same, absolute `command` paths |
 | VS Code | `.vscode/mcp.json` | `servers` → `type: stdio` + `command`, supports `${input:...}` prompts |
+| Grok Build | `~/.grok/config.toml` or `.grok/config.toml` | stdio `command`/`args`; see [examples/grok.config.toml](../examples/grok.config.toml) |
+| Grok Bot | none (chat) | public `https://…/mcp` + `Authorization: Bearer`; see [examples/grok-bot.md](../examples/grok-bot.md) |
 | agentPacks plugin | `plugins/<plugin>/mcp.json` | Agent Plugins 1.0.0: `type: stdio`, bare `command`, `${PLUGIN_ROOT}`/`${PLUGIN_DATA}` only in `args`/`env`/`cwd`, no credential-like env keys |
 
 Copy-ready files for each are in `examples/`.
@@ -116,4 +126,7 @@ Copy-ready files for each are in `examples/`.
 - **Client shows no tools**: run the command in a terminal with the same args; the server prints its usage and errors to stderr and exits with code 2 on a start-up problem (missing directory, bad connection string).
 - **Roslyn: "No .NET SDK found by MSBuildLocator"**: `dotnet` must be on `PATH` of the server process, or set `DOTNET_ROOT`. `list_workspaces` reports the MSBuild status.
 - **Roslyn: projects load with warnings / missing references**: run `dotnet restore` on the solution once; `workspace_status` shows `loadDiagnostics`.
+- **HTTP 401 / Grok Bot reports no tools**: `/mcp` requires `Authorization: Bearer` when `MCP_AUTH_TOKEN` is set (always, in Docker). Health endpoints do not. Confirm the URL path is `/mcp`, not `/health`.
+- **Tunnel Host header rejected (400 Bad Request)**: set `--allowed-host <hostname>` or `MCP_ALLOWED_HOSTS=*`, and `--public-url https://<hostname>`.
+- **Grok Bot cannot reach localhost**: the bot runs in the cloud. Use a public HTTPS tunnel; do not paste a `command`/`npx` line for these .NET servers. Team MCP allowlists can also block unknown URLs.
 - **Index looks stale**: `index_status` shows `stale` with the changed files; `verify_index` with `repair=true` fixes inconsistencies; the git hooks (`scripts/install-git-hooks.sh`) keep it warm outside MCP sessions.

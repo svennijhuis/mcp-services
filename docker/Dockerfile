@@ -30,6 +30,7 @@ RUN mkdir -p /data && chown mcp:mcp /data
 VOLUME ["/data"]
 USER mcp
 EXPOSE 5100
-# Default: Streamable HTTP on 0.0.0.0:5100. Override the command to run over stdio (e.g. `docker run -i ... mcp-index`).
+# Default: Streamable HTTP on 0.0.0.0:5100 (requires MCP_AUTH_TOKEN). Override the command to run over stdio
+# (e.g. `docker run -i ... mcp-index --root /workspace`).
 ENTRYPOINT ["/bin/sh", "-c", "exec dotnet /app/${SERVER_DLL} \"$@\"", "--"]
 CMD ["--http", "--port", "5100"]

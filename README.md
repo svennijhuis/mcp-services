@@ -1,6 +1,6 @@
 # mcp-services
 
-A monorepo of [Model Context Protocol](https://modelcontextprotocol.io) servers written in C# on .NET 10, built on the official [`ModelContextProtocol`](https://www.nuget.org/packages/ModelContextProtocol) SDK. Every server is a single console binary that speaks **stdio** (Cursor, Claude Desktop, VS Code) and, with `--http`, **Streamable HTTP** (Docker, remote bots).
+A monorepo of [Model Context Protocol](https://modelcontextprotocol.io) servers written in C# on .NET 10, built on the official [`ModelContextProtocol`](https://www.nuget.org/packages/ModelContextProtocol) SDK. Every server is a single console binary that speaks **stdio** (Cursor, Claude Desktop, VS Code, Grok Build) and, with `--http`, **Streamable HTTP** (Docker, Grok Bot, other remote agents).
 
 | Server | Command | What it does | Docs |
 |---|---|---|---|
@@ -37,25 +37,26 @@ Then add the servers to your client. For Cursor, `.cursor/mcp.json`:
 }
 ```
 
-Ready-made configurations for Cursor, Claude Desktop, VS Code, the [agentPacks](https://github.com/svennijhuis/agentPacks) plugin schema and the Docker/HTTP stack are in [`examples/`](examples). All the ways to run the servers (from source, published binary, global tool, Docker) are described in [docs/LOCAL_USAGE.md](docs/LOCAL_USAGE.md).
+Ready-made configurations for Cursor, Claude Desktop, VS Code, Grok Build, Grok Bot, the [agentPacks](https://github.com/svennijhuis/agentPacks) plugin schema and the Docker/HTTP stack are in [`examples/`](examples). All the ways to run the servers (from source, published binary, global tool, Docker) are described in [docs/LOCAL_USAGE.md](docs/LOCAL_USAGE.md). Grok Bot cannot use localhost or stdio; see [examples/grok-bot.md](examples/grok-bot.md).
 
 ## Docker (shared store for teams and remote agents)
 
 ```bash
+cp docker/.env.example docker/.env   # set MCP_AUTH_TOKEN (required)
 cd docker && docker compose up -d --build
 ```
 
-Starts PostgreSQL with pgvector plus all five servers over Streamable HTTP on `localhost:5100-5104` (`/mcp`). Index and Learnings use the shared PostgreSQL store, so every agent that connects learns from the same data; without Docker they fall back to SQLite under `~/.mcp-services`.
+Starts PostgreSQL with pgvector plus all five servers over Streamable HTTP on `localhost:5100-5104` (`/mcp`). Index and Learnings use the shared PostgreSQL store, so every agent that connects learns from the same data; without Docker they fall back to SQLite under `~/.mcp-services`. Compose publishes ports on loopback only; `/mcp` requires `Authorization: Bearer` (`MCP_AUTH_TOKEN`). For Grok Bot put a TLS tunnel in front of those ports — see [examples/grok-bot.md](examples/grok-bot.md).
 
 ## Repository layout
 
 ```
-src/shared/McpServices.Hosting      shared host: stdio/HTTP, CommandLine, ToolJson, Paging, TextDiff, ToolException
+src/shared/McpServices.Hosting      shared host: stdio/HTTP, bearer auth, CommandLine, ToolJson, Paging, TextDiff, ToolException
 src/shared/McpServices.Storage      IKnowledgeStore: SqliteStore | PostgresStore, migrations, RRF, SecretRedactor
 src/servers/McpServices.*           one project per server (ToolCommandName mcp-*)
-tests/                              xunit; servers are tested as child processes over stdio with the SDK client
+tests/                              xunit; servers over stdio plus HTTP host tests
 tests/fixtures/SampleSolution       two-project solution used by the Roslyn tests
-examples/                           client configurations
+examples/                           client configurations (Cursor, VS Code, Grok Build, Grok Bot, Docker)
 docker/                             Dockerfiles + docker-compose.yml (pgvector)
 scripts/                            build, publish, pack, install-tools, git hooks for mcp-index
 docs/                               architecture, adding a server, local usage, per-server docs
@@ -67,7 +68,7 @@ docs/                               architecture, adding a server, local usage, 
 - Every tool validates input and throws `ToolException`, which the SDK turns into an `isError` result the agent can read; nothing else leaks.
 - Destructive operations (`edit_file`, `write_query`, `rename_symbol`, `apply_code_fix`, ...) default to a dry run or require an explicit flag, and return unified diffs.
 - Results are paginated (`pageToken`) and capped, so a tool call never floods the context window.
-- Configuration lives in `args` and environment variables, never in the command; credentials (`CURSOR_API_KEY`, `OPENAI_API_KEY`, connection passwords) are read from the process environment only.
+- Configuration lives in `args` and environment variables, never in tool parameters; credentials (`MCP_AUTH_TOKEN`, `CURSOR_API_KEY`, `OPENAI_API_KEY`, connection passwords) come from the environment (`--auth-token` is accepted for HTTP but shows up in `ps` — prefer `MCP_AUTH_TOKEN`). HTTP `--host` other than loopback refuses to start without a token.
 - Shared storage abstraction: SQLite for a single developer, PostgreSQL + pgvector for shared/remote use, same code path.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the internals and [docs/ADDING_A_SERVER.md](docs/ADDING_A_SERVER.md) to add a sixth server.

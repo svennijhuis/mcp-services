@@ -1,0 +1,31 @@
+# Grok Build CLI: copy to ~/.grok/config.toml (user) or .grok/config.toml (project).
+# Local stdio — same global tools as Cursor (scripts/install-tools.sh). ${WORKSPACE} expands
+# from the environment; export it to the repo you want indexed / sandboxed.
+#
+# This is NOT Grok Bot. Grok Bot runs in the cloud, cannot reach localhost, and cannot run
+# these .NET tools as npx/stdio. Use examples/grok-bot.md for that path.
+
+[mcp_servers.filesystem]
+command = "mcp-filesystem"
+args = ["${WORKSPACE}"]
+startup_timeout_sec = 60
+
+[mcp_servers.database]
+command = "mcp-database"
+args = ["--db", "app=sqlite:${WORKSPACE}/app.db", "--read-only"]
+startup_timeout_sec = 60
+
+[mcp_servers.roslyn]
+command = "mcp-roslyn"
+args = ["--root", "${WORKSPACE}", "--restrict"]
+startup_timeout_sec = 120
+
+[mcp_servers.index]
+command = "mcp-index"
+args = ["--root", "${WORKSPACE}", "--auto-refresh", "inline", "--watch"]
+startup_timeout_sec = 60
+
+[mcp_servers.learnings]
+command = "mcp-learnings"
+args = ["--repo", "owner/name", "--dispatch", "manual"]
+startup_timeout_sec = 60

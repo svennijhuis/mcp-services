@@ -1,14 +1,19 @@
 # Full local stack: PostgreSQL + pgvector as the shared knowledge store, and every server over Streamable HTTP.
 #
-#   cd docker && docker compose up -d --build
+#   cd docker
+#   cp .env.example .env    # set MCP_AUTH_TOKEN (required: containers bind 0.0.0.0)
+#   docker compose up -d --build
 #   curl -s http://localhost:5103/mcp -X POST -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+#        -H "Authorization: Bearer $MCP_AUTH_TOKEN" \
 #        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
 #
 # Point clients at the URLs in ../examples/docker.mcp.json. Set WORKSPACE to the directory you want the
 # filesystem/roslyn/index servers to see (default: the parent of this repository).
+# Ports stay on 127.0.0.1. For Grok Bot, put a TLS tunnel in front (see ../examples/grok-bot.md); do not
+# publish 0.0.0.0. A tunnel to loopback is still public — the bearer token is the access control.
 #
-# Secrets (CURSOR_API_KEY, OPENAI_API_KEY, POSTGRES_PASSWORD) are read from your shell or a local .env file
-# next to this compose file — never commit them.
+# Secrets (MCP_AUTH_TOKEN, CURSOR_API_KEY, OPENAI_API_KEY, POSTGRES_PASSWORD) are read from your shell or a
+# local .env file next to this compose file — never commit them.
 
 name: mcp-services
 
@@ -17,6 +22,10 @@ x-common: &common
   init: true
   environment: &common-env
     DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?Set MCP_AUTH_TOKEN in docker/.env (copy .env.example and run openssl rand -hex 32)}
+    MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-}
+    MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+    MCP_CORS_ORIGINS: ${MCP_CORS_ORIGINS:-}
 
 services:
   postgres:

@@ -6,7 +6,8 @@ flowchart LR
     Cursor
     Claude[Claude Desktop]
     VSCode[VS Code]
-    Remote["Remote agents / bots"]
+    GrokBuild[Grok Build CLI]
+    GrokBot[Grok Bot]
   end
   subgraph servers [Servers - one binary each]
     FS[mcp-filesystem]
@@ -20,9 +21,11 @@ flowchart LR
   SQLite[("SQLite<br/>~/.mcp-services")]
   PG[("PostgreSQL + pgvector<br/>docker compose")]
   CursorCloud["Cursor Cloud Agents API / Cursor CLI"]
+  Tunnel["HTTPS tunnel / reverse proxy"]
 
-  Cursor & Claude & VSCode -->|stdio| servers
-  Remote -->|"Streamable HTTP (--http)"| servers
+  Cursor & Claude & VSCode & GrokBuild -->|stdio| servers
+  servers -->|optional --http loopback| Tunnel
+  GrokBot -->|"Streamable HTTP /mcp + Bearer"| Tunnel
   FS & DB & RS & IX & LN --> Hosting
   IX & LN --> Storage
   Storage --> SQLite
@@ -34,7 +37,7 @@ flowchart LR
 
 | Project | Role |
 |---|---|
-| `src/shared/McpServices.Hosting` | `McpServerHost.RunAsync(args, descriptor, configure)`: parses shared options, picks stdio or Streamable HTTP, wires logging to stderr, registers the `server_info` tool. Also `CommandLine`, `ToolJson`, `Paging`, `TextDiff`, `ToolException`/`ToolGuard`, `ServerStartupException`. |
+| `src/shared/McpServices.Hosting` | `McpServerHost.RunAsync(args, descriptor, configure)`: parses shared options, picks stdio or Streamable HTTP, wires logging to stderr, registers the `server_info` tool. Also `HttpHostOptions` (bind, bearer token, allowed hosts, CORS, public URL), `BearerAuthentication`, `CommandLine`, `ToolJson`, `Paging`, `TextDiff`, `ToolException`/`ToolGuard`, `ServerStartupException`. |
 | `src/shared/McpServices.Storage` | `IKnowledgeStore` with `SqliteStore` and `PostgresStore`, versioned `Migration`s with a SQL text per dialect, `SqlDialect` helpers (upsert, ILIKE, full-text), `Db` extension methods over `DbConnection`, `Rrf` (reciprocal rank fusion), `VectorCodec`, `SecretRedactor`, `RepoIdentity`, `StoreInitializer` (migrations run once, guarded), `KnowledgeStoreFactory.Resolve` (`--store` / env / default file). |
 | `src/servers/McpServices.FileSystem` | `PathGuard` (allowed roots, symlink resolution), `FileEditor` (line-based edits, whitespace-insensitive fallback, unified diff), 13 tools. |
 | `src/servers/McpServices.Database` | `IDatabaseProvider` implementations for SQLite, PostgreSQL (Npgsql), SQL Server; `SqlGuard` (single statement, read-only starters, no comments/`;` smuggling); `DatabaseRegistry` from `--db` and `MCP_DB__<alias>`; schema resource `db://{alias}/schema`. |
@@ -45,11 +48,11 @@ flowchart LR
 
 ## Hosting: one binary, two transports
 
-`McpServerHost.RunAsync` handles `--help`, `--version`, `--http`, `--port`, `--host`, `--log-level` and then calls the server's `configure(HostContext)` callback. The callback registers services, exposes configuration for `server_info` (`context.Expose(key, value)`) and registers tool/resource/prompt classes via `context.Mcp.WithTools<T>(ToolJson.Options)`.
+`McpServerHost.RunAsync` handles `--help`, `--version`, `--http`, `--port`, `--host`, `--auth-token`, `--public-url`, `--allowed-host`, `--cors-origin`, `--log-level` and then calls the server's `configure(HostContext)` callback. The callback registers services, exposes configuration for `server_info` (`context.Expose(key, value)`) and registers tool/resource/prompt classes via `context.Mcp.WithTools<T>(ToolJson.Options)`.
 
 - **stdio**: `Host.CreateApplicationBuilder` + `WithStdioServerTransport()`. Console logging is forced to stderr and `Console.Out` is redirected to stderr as well, so nothing but protocol frames reaches stdout (the SDK writes frames to the raw stdout stream).
-- **HTTP**: `WebApplication.CreateBuilder` + `WithHttpTransport()` + `MapMcp("/mcp")`. Binds `127.0.0.1` unless `--host` says otherwise; there is deliberately no authentication layer, that belongs in a reverse proxy.
-- Start-up problems (missing directory, bad connection string) throw `ServerStartupException` → usage + message on stderr, exit code 2. Tool-level problems throw `ToolException` (an `McpException`), which the SDK returns as `isError: true` with the message, so agents can self-correct; any other exception is masked by the SDK.
+- **HTTP**: `WebApplication.CreateSlimBuilder` + `WithHttpTransport()` (stateless by default) + `MapMcp("/mcp")`. Binds `127.0.0.1` unless `--host` says otherwise. `--auth-token` / `MCP_AUTH_TOKEN` requires `Authorization: Bearer` on `/mcp` (constant-time compare); missing token on a non-loopback bind is a start-up error (exit 2). Loopback without a token stays local-only. A tunnel to loopback is still public, so a token is mandatory for Grok Bot and any other remote client. `GET /health` and `GET /healthz` are unauthenticated. Forwarded headers (`X-Forwarded-Proto` / `Host`) are honoured; `--allowed-host` / `--public-url` add the tunnel hostname to the ASP.NET allow-list so `Host: foo.trycloudflare.com` is accepted; `--cors-origin` is opt-in for browsers. Reverse proxy TLS is still recommended in front of multi-user deployments; the in-process bearer is what Grok Bot can send as a header.
+- Start-up problems (missing directory, bad connection string, public HTTP without a token) throw `ServerStartupException` → usage + message on stderr, exit code 2. Tool-level problems throw `ToolException` (an `McpException`), which the SDK returns as `isError: true` with the message, so agents can self-correct; any other exception is masked by the SDK.
 - `ToolJson.Options`: camelCase, enums as lower-case strings, nulls omitted. Tools return anonymous objects or records; the SDK serializes them as the text content.
 - `Paging.Page(list, pageToken, pageSize)` returns `{ items, totalCount, nextPageToken }` with an opaque base64 offset token; large results are always capped before paging.
 
@@ -92,4 +95,4 @@ Search fuses independent rankers with reciprocal rank fusion: BM25 full-text, ex
 
 ## Testing strategy
 
-Servers are tested the way clients use them: `ServerFixture` launches the built server DLL as a child process with `StdioClientTransport`, then calls `tools/list` and real tools. Fake HTTP servers (`HttpListener`) stand in for the Cursor API and embedding endpoints; stub `agent`/`gh` scripts on `PATH` and a local bare git repository exercise the CLI dispatcher. The Roslyn tests copy `tests/fixtures/SampleSolution` to a temp directory, restore it and load it through MSBuild, so refactoring tests can write files safely. PostgreSQL contract tests run only when `MCP_TEST_POSTGRES` is set.
+Servers are tested the way clients use them: `ServerFixture` launches the built server DLL as a child process with `StdioClientTransport`, then calls `tools/list` and real tools. Hosting also boots `--http` on an ephemeral loopback port and talks to it with `HttpClientTransport` (handshake, bearer 401/200, CORS preflight, `/health`). Fake HTTP servers (`HttpListener`) stand in for the Cursor API and embedding endpoints; stub `agent`/`gh` scripts on `PATH` and a local bare git repository exercise the CLI dispatcher. The Roslyn tests copy `tests/fixtures/SampleSolution` to a temp directory, restore it and load it through MSBuild, so refactoring tests can write files safely. PostgreSQL contract tests run only when `MCP_TEST_POSTGRES` is set.
