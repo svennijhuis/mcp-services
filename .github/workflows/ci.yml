@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    name: build-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -28,10 +33,11 @@ jobs:
         run: dotnet test McpServices.slnx --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
 
       - name: Pack tools
+        if: matrix.os == 'ubuntu-latest'
         run: dotnet pack McpServices.slnx --no-build --configuration Release --output nupkg
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: TestResults
