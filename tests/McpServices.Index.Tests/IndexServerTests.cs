@@ -79,8 +79,25 @@ public sealed class IndexServerFixture : IAsyncLifetime
                 info.ArgumentList.Add(a);
             }
 
+            // Otherwise git may leave an fsmonitor daemon behind that inherits the test host's pipes
+            // and keeps vstest waiting for end-of-file after all tests finished (Windows).
+            foreach (var (key, value) in McpServices.Hosting.ProcessOutput.GitBackgroundHelpersOff)
+            {
+                info.Environment[key] = value;
+            }
+
             using var process = Process.Start(info)!;
+            var drain = Task.WhenAll(process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
             await process.WaitForExitAsync();
+            try
+            {
+                await drain.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (TimeoutException)
+            {
+                // Pipes held open by an orphaned helper; the exit code is all we need.
+            }
+
             return process.ExitCode == 0;
         }
         catch (System.ComponentModel.Win32Exception)

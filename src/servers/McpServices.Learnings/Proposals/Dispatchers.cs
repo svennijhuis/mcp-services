@@ -266,14 +266,20 @@ public sealed partial class CursorCliDispatcher(LearningsOptions options, ILogge
             info.ArgumentList.Add(argument);
         }
 
+        foreach (var (key, value) in ProcessOutput.GitBackgroundHelpersOff)
+        {
+            info.Environment[key] = value;
+        }
+
         using var process = Process.Start(info) ?? throw new ToolException($"Could not start '{command}'.");
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
-        var stdout = process.StandardOutput.ReadToEndAsync(cts.Token);
-        var stderr = process.StandardError.ReadToEndAsync(cts.Token);
+        var exited = process.WaitForExitAsync(cts.Token);
+        var stdout = ProcessOutput.DrainAsync(process.StandardOutput.BaseStream, exited, cts.Token);
+        var stderr = ProcessOutput.DrainAsync(process.StandardError.BaseStream, exited, cts.Token);
         try
         {
-            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+            await exited.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

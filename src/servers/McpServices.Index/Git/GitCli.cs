@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using McpServices.Hosting;
 
 namespace McpServices.Index.Git;
 
@@ -106,8 +107,11 @@ public sealed class GitCli
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
-        info.ArgumentList.Add("-c");
-        info.ArgumentList.Add("core.quotepath=off");
+        foreach (var argument in GlobalArguments)
+        {
+            info.ArgumentList.Add(argument);
+        }
+
         foreach (var argument in arguments)
         {
             info.ArgumentList.Add(argument);
@@ -130,9 +134,10 @@ public sealed class GitCli
         cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(60));
         try
         {
-            var stdout = process.StandardOutput.ReadToEndAsync(cts.Token);
-            var stderr = process.StandardError.ReadToEndAsync(cts.Token);
-            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+            var exited = process.WaitForExitAsync(cts.Token);
+            var stdout = ProcessOutput.DrainAsync(process.StandardOutput.BaseStream, exited, cts.Token);
+            var stderr = ProcessOutput.DrainAsync(process.StandardError.BaseStream, exited, cts.Token);
+            await exited.ConfigureAwait(false);
             return new GitResult(process.ExitCode == 0, await stdout.ConfigureAwait(false), await stderr.ConfigureAwait(false));
         }
         catch (OperationCanceledException)
@@ -149,6 +154,21 @@ public sealed class GitCli
             return new GitResult(false, string.Empty, "git timed out");
         }
     }
+
+    /// <summary>
+    /// Options prepended to every invocation. Background helpers that git may spawn (fsmonitor daemon,
+    /// pager) inherit our pipe handles on Windows and keep them open after git itself has exited,
+    /// which would make reading to end-of-file hang until the timeout.
+    /// </summary>
+    internal static readonly string[] GlobalArguments =
+    [
+        "--no-pager",
+        "-c", "core.quotepath=off",
+        "-c", "core.fsmonitor=false",
+        "-c", "core.useBuiltinFSMonitor=false",
+        "-c", "maintenance.auto=false",
+    ];
+
 
     private static bool Probe()
     {

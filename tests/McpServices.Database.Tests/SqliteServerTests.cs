@@ -22,7 +22,7 @@ public sealed class SqliteServerFixture : IAsyncLifetime
     {
         await Server.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        File.Delete(DatabasePath);
+        await TempFiles.DeleteAsync(DatabasePath);
     }
 
     public static void Seed(string path)
@@ -248,7 +248,7 @@ public class ReadOnlyServerTests
         finally
         {
             SqliteConnection.ClearAllPools();
-            File.Delete(path);
+            await TempFiles.DeleteAsync(path);
         }
     }
 }
