@@ -23,7 +23,9 @@ public sealed class SampleSolutionFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        Root = Path.Combine(Path.GetTempPath(), "mcp-roslyn-tests", Guid.NewGuid().ToString("N"));
+        // Resolve symlinks (macOS: /var/folders -> /private/var/folders) so NuGet and MSBuild see one
+        // spelling of every path; otherwise restore treats each project as two and races with itself.
+        Root = Path.Combine(ResolveLinks(Path.GetTempPath()), "mcp-roslyn-tests", Guid.NewGuid().ToString("N"));
         CopyDirectory(Path.Combine(AppContext.BaseDirectory, "fixtures", "SampleSolution"), Root);
         await RestoreAsync();
         Server = await ServerFixture.StartAsync("McpServices.Roslyn", ["--root", Root, "--restrict"]);
@@ -40,6 +42,31 @@ public sealed class SampleSolutionFixture : IAsyncLifetime
         {
             // Best effort.
         }
+    }
+
+    /// <summary>realpath: resolves a symlink in any component, not just the last one.</summary>
+    private static string ResolveLinks(string path)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var current = root;
+        foreach (var segment in full[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            try
+            {
+                if (new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true) is { } target)
+                {
+                    current = target.FullName;
+                }
+            }
+            catch (IOException)
+            {
+                // Not resolvable; keep the lexical form.
+            }
+        }
+
+        return current;
     }
 
     public static string DotnetPath()
