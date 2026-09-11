@@ -115,16 +115,14 @@ public sealed class IndexServerFixture : IAsyncLifetime
     {
         await Server.DisposeAsync();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try
+        await TempFiles.DeleteAsync(Root);
+        var storeDir = Path.GetDirectoryName(StorePath);
+        if (storeDir is not null)
         {
-            Directory.Delete(Root, recursive: true);
-            foreach (var file in Directory.GetFiles(Path.GetDirectoryName(StorePath)!, Path.GetFileName(StorePath) + "*"))
+            foreach (var file in Directory.GetFiles(storeDir, Path.GetFileName(StorePath) + "*"))
             {
-                File.Delete(file);
+                await TempFiles.DeleteAsync(file);
             }
-        }
-        catch (IOException)
-        {
         }
     }
 }
