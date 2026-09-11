@@ -61,11 +61,27 @@ public sealed class SampleSolutionFixture : IAsyncLifetime
         info.ArgumentList.Add(SolutionPath);
         info.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
         info.Environment["MSBUILDTERMINALLOGGER"] = "off";
+        // Worker nodes and the compiler server would outlive restore and, on Windows, keep our
+        // redirected pipes open so ReadToEnd never completes.
+        info.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        info.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
         using var process = Process.Start(info) ?? throw new InvalidOperationException("Cannot start dotnet restore.");
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("dotnet restore of the sample solution did not finish within 5 minutes.");
+        }
+
+        var output = await outputTask;
+        var error = await errorTask;
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException($"dotnet restore of the sample solution failed ({process.ExitCode}):\n{output}\n{error}");

@@ -165,6 +165,10 @@ public sealed partial class BuildTools(WorkspaceManager workspaces, RoslynOption
         startInfo.Environment["DOTNET_NOLOGO"] = "1";
         startInfo.Environment["MSBUILDTERMINALLOGGER"] = "off";
         startInfo.Environment["NUGET_XMLDOC_MODE"] = "skip";
+        // No lingering MSBuild worker nodes or compiler server: they would outlive the tool call and,
+        // on Windows, inherit our pipes so the output streams never reach end-of-file.
+        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
+        startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
         var output = new StringBuilder();
         var stopwatch = Stopwatch.StartNew();

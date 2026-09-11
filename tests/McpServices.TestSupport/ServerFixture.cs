@@ -17,6 +17,12 @@ public sealed class ServerFixture : IAsyncDisposable
 
     public McpClient Client { get; }
 
+    /// <summary>Upper bound for server start-up (includes JIT and, for mcp-roslyn, MSBuild discovery).</summary>
+    public static TimeSpan StartupTimeout { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>Upper bound for a single tool call; a hang surfaces as a failure naming the tool instead of stalling the run.</summary>
+    public static TimeSpan CallTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
     public static async Task<ServerFixture> StartAsync(string serverAssemblyName, IEnumerable<string> args, IDictionary<string, string?>? environment = null, CancellationToken cancellationToken = default)
     {
         var dll = Path.Combine(AppContext.BaseDirectory, serverAssemblyName + ".dll");
@@ -34,8 +40,17 @@ public sealed class ServerFixture : IAsyncDisposable
             WorkingDirectory = AppContext.BaseDirectory,
         });
 
-        var client = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return new ServerFixture(client);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(StartupTimeout);
+        try
+        {
+            var client = await McpClient.CreateAsync(transport, cancellationToken: timeout.Token).ConfigureAwait(false);
+            return new ServerFixture(client);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Server '{serverAssemblyName}' did not complete the MCP handshake within {StartupTimeout}.");
+        }
     }
 
     public async Task<IReadOnlyList<string>> ToolNamesAsync()
@@ -76,8 +91,18 @@ public sealed class ServerFixture : IAsyncDisposable
         return FirstText(result);
     }
 
-    public async Task<CallToolResult> CallAsync(string tool, object? arguments = null) =>
-        await Client.CallToolAsync(tool, ToDictionary(arguments), cancellationToken: CancellationToken.None).ConfigureAwait(false);
+    public async Task<CallToolResult> CallAsync(string tool, object? arguments = null)
+    {
+        using var timeout = new CancellationTokenSource(CallTimeout);
+        try
+        {
+            return await Client.CallToolAsync(tool, ToDictionary(arguments), cancellationToken: timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException($"Tool '{tool}' did not answer within {CallTimeout}.");
+        }
+    }
 
     private static IReadOnlyDictionary<string, object?>? ToDictionary(object? arguments)
     {

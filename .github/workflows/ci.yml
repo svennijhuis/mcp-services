@@ -12,6 +12,7 @@ jobs:
   build-test:
     name: build-test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -30,7 +31,7 @@ jobs:
         run: dotnet build McpServices.slnx --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test McpServices.slnx --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory TestResults
+        run: dotnet test McpServices.slnx --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory TestResults --blame-hang --blame-hang-timeout 8m --blame-hang-dump-type none
 
       - name: Pack tools
         if: matrix.os == 'ubuntu-latest'
