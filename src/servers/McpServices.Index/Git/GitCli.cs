@@ -100,6 +100,7 @@ public sealed class GitCli
         var info = new ProcessStartInfo("git")
         {
             WorkingDirectory = workingDirectory,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -117,8 +118,15 @@ public sealed class GitCli
             info.ArgumentList.Add(argument);
         }
 
+        foreach (var (key, value) in ProcessOutput.GitBackgroundHelpersOff)
+        {
+            info.Environment[key] = value;
+        }
+
+        // Empty pager: "cat" is not on PATH on Windows and would hang. Closing stdin matters because
+        // the MCP server speaks stdio; git would otherwise inherit that pipe and wait for input.
         info.Environment["GIT_OPTIONAL_LOCKS"] = "0";
-        info.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        info.Environment["GIT_PAGER"] = string.Empty;
 
         using var process = new Process { StartInfo = info };
         try
@@ -129,6 +137,8 @@ public sealed class GitCli
         {
             return new GitResult(false, string.Empty, ex.Message);
         }
+
+        process.StandardInput.Close();
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(60));
@@ -167,6 +177,8 @@ public sealed class GitCli
         "-c", "core.fsmonitor=false",
         "-c", "core.useBuiltinFSMonitor=false",
         "-c", "maintenance.auto=false",
+        "-c", "core.pager=",
+        "-c", "safe.directory=*",
     ];
 
 
@@ -174,20 +186,42 @@ public sealed class GitCli
     {
         try
         {
-            using var process = Process.Start(new ProcessStartInfo("git", "--version")
+            var info = new ProcessStartInfo("git", "--version")
             {
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-            });
+            };
+            foreach (var (key, value) in ProcessOutput.GitBackgroundHelpersOff)
+            {
+                info.Environment[key] = value;
+            }
+
+            using var process = Process.Start(info);
             if (process is null)
             {
                 return false;
             }
 
+            process.StandardInput.Close();
+
             process.WaitForExit(5000);
-            return process.HasExited && process.ExitCode == 0;
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                return false;
+            }
+
+            return process.ExitCode == 0;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {

@@ -66,14 +66,18 @@ public sealed class IndexServerFixture : IAsyncLifetime
             await Git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "touch both");
         }
 
-        Server = await ServerFixture.StartAsync("McpServices.Index", ["--root", Root, "--store", $"sqlite:{StorePath}", "--log-level", "Warning"]);
+        var environment = McpServices.Hosting.ProcessOutput.GitBackgroundHelpersOff.ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
+        Server = await ServerFixture.StartAsync(
+            "McpServices.Index",
+            ["--root", Root, "--store", $"sqlite:{StorePath}", "--log-level", "Warning"],
+            environment);
     }
 
     public async Task<bool> Git(params string[] args)
     {
         try
         {
-            var info = new ProcessStartInfo("git") { WorkingDirectory = Root, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            var info = new ProcessStartInfo("git") { WorkingDirectory = Root, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
             foreach (var a in args)
             {
                 info.ArgumentList.Add(a);
@@ -87,6 +91,7 @@ public sealed class IndexServerFixture : IAsyncLifetime
             }
 
             using var process = Process.Start(info)!;
+            process.StandardInput.Close();
             var drain = Task.WhenAll(process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
             await process.WaitForExitAsync();
             try
@@ -110,16 +115,14 @@ public sealed class IndexServerFixture : IAsyncLifetime
     {
         await Server.DisposeAsync();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try
+        await TempFiles.DeleteAsync(Root);
+        var storeDir = Path.GetDirectoryName(StorePath);
+        if (storeDir is not null)
         {
-            Directory.Delete(Root, recursive: true);
-            foreach (var file in Directory.GetFiles(Path.GetDirectoryName(StorePath)!, Path.GetFileName(StorePath) + "*"))
+            foreach (var file in Directory.GetFiles(storeDir, Path.GetFileName(StorePath) + "*"))
             {
-                File.Delete(file);
+                await TempFiles.DeleteAsync(file);
             }
-        }
-        catch (IOException)
-        {
         }
     }
 }
