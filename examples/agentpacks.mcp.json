@@ -31,7 +31,7 @@
     "omni": {
       "type": "stdio",
       "command": "mcp-omni",
-      "env": { "MCP_OMNI_REGISTRY": "${PLUGIN_DATA}/omni.localhost.registry.json" }
+      "env": { "MCP_OMNI_REGISTRY": "/absolute/path/omni.localhost.registry.json" }
     }
   }
 }

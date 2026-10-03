@@ -143,6 +143,22 @@ public sealed class OmniServerTests : IClassFixture<OmniFixture>
         Assert.Empty(registry.Enabled);
     }
 
+    [Fact]
+    public void Compose_registry_enables_compose_dns()
+    {
+        var registry = OmniRegistry.Load(RepoFile("docker/omni.compose.registry.json"));
+        Assert.Equal(["database", "filesystem", "index", "learnings", "roslyn"], registry.Servers.Select(server => server.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray());
+        Assert.All(registry.Servers, server =>
+        {
+            Assert.True(server.Enabled);
+            Assert.Equal(8000, server.MaxChars);
+            Assert.Equal("summary", server.Projection);
+            Assert.Equal($"http://{server.Id}:5100/mcp", server.BaseUrl.ToString());
+            Assert.Equal($"http://{server.Id}:5100/healthz", server.HealthUrl.ToString());
+        });
+        Assert.Equal(5, registry.Enabled.Count);
+    }
+
     private static string RepoFile(string relative)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -212,6 +228,79 @@ public sealed class OmniDownTests : IAsyncLifetime
           ]
         }
         """;
+}
+
+public sealed class OmniPartialDiscoverTests : IAsyncLifetime
+{
+    private readonly FakeMcp _live = new();
+    private int _downPort;
+    private string _registry = null!;
+    private ServerFixture _server = null!;
+
+    public async Task InitializeAsync()
+    {
+        using (var socket = new TcpListener(IPAddress.Loopback, 0))
+        {
+            socket.Start();
+            _downPort = ((IPEndPoint)socket.LocalEndpoint).Port;
+        }
+
+        _registry = Path.Combine(Path.GetTempPath(), "omni-partial-" + Guid.NewGuid().ToString("N") + ".json");
+        var json = $$"""
+        {
+          "servers": [
+            {
+              "id": "down",
+              "title": "Down",
+              "summary": "Closed port.",
+              "enabled": true,
+              "role": "test",
+              "baseUrl": "http://127.0.0.1:{{_downPort}}/mcp",
+              "healthUrl": "http://127.0.0.1:{{_downPort}}/healthz",
+              "projection": "summary",
+              "maxChars": 8000
+            },
+            {
+              "id": "live",
+              "title": "Live",
+              "summary": "Fake backend.",
+              "enabled": true,
+              "role": "test",
+              "baseUrl": "{{_live.Endpoint}}",
+              "healthUrl": "{{_live.HealthUrl}}",
+              "projection": "summary",
+              "maxChars": 8000
+            }
+          ]
+        }
+        """;
+        await File.WriteAllTextAsync(_registry, json);
+        _server = await ServerFixture.StartAsync("McpServices.Omni", ["--registry", _registry, "--log-level", "Warning"]);
+    }
+
+    [Fact]
+    public async Task Down_sibling_does_not_hide_live_tools()
+    {
+        var listed = await _server.CallJsonAsync("discover_tools");
+        var tools = listed.GetProperty("tools").EnumerateArray().ToList();
+        var live = tools.Where(tool => tool.GetProperty("server").GetString() == "live").ToList();
+        Assert.Equal(["echo", "other"], live.Select(tool => tool.GetProperty("name").GetString()!).ToArray());
+        Assert.All(live, tool => Assert.False(tool.TryGetProperty("error", out _)));
+
+        var down = Assert.Single(tools, tool => tool.GetProperty("server").GetString() == "down");
+        Assert.False(down.TryGetProperty("name", out _));
+        Assert.Contains("unreachable", down.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var error = await _server.CallExpectingErrorAsync("discover_tools", new { server = "down" });
+        Assert.Contains("unreachable", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _server.DisposeAsync();
+        _live.Dispose();
+        File.Delete(_registry);
+    }
 }
 
 public sealed class OmniTimeoutTests : IAsyncLifetime

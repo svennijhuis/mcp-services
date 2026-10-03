@@ -67,7 +67,7 @@ WORKSPACE=/abs/repo docker compose up -d --build
 | database | 5102 | exposes the shared PostgreSQL itself as alias `mcp` (read-only) |
 | index | 5103 | PostgreSQL + pgvector |
 | learnings | 5104 | PostgreSQL + pgvector |
-| omni | 5105 | registry.json (compose DNS, backends disabled until enabled) |
+| omni | 5105 | `docker/omni.compose.registry.json` (compose DNS, enabled) |
 | postgres | 5432 (loopback) | named volume `postgres-data` |
 
 Clients connect with `{ "url": "http://localhost:5103/mcp" }` (see `examples/docker.mcp.json`). Ports are bound to `127.0.0.1`; put a reverse proxy with TLS and authentication in front before exposing anything beyond your machine, because the servers themselves have no authentication layer.
@@ -109,7 +109,7 @@ Copy-ready files for each are in `examples/`.
 
 ### agentPacks specifics
 
-`examples/agentpacks.mcp.json` validates against the Agent Plugins 1.0.0 schema used by [svennijhuis/agentPacks](https://github.com/svennijhuis/agentPacks): commands are bare tokens resolved on `PATH` (so install the global tools first), all configuration is in `args`/`env`, and secrets are never in the file. `mcp-learnings` reads `CURSOR_API_KEY` from the process environment; `mcp-index` reads `OPENAI_API_KEY` the same way. Paths for the servers to work on are passed by the agent to the tools (`load_solution`, `index_repository`, ...) or expressed with `${PLUGIN_DATA}`; do not use `--restrict` there unless the workspace lives under the plugin data directory. Adding real servers to agentPacks also means updating its `PluginMcpContractTests`, which currently assert that every `mcp.json` is an empty scaffold.
+`examples/agentpacks.mcp.json` validates against the Agent Plugins 1.0.0 schema used by [svennijhuis/agentPacks](https://github.com/svennijhuis/agentPacks): commands are bare tokens resolved on `PATH` (so install the global tools first), all configuration is in `args`/`env`, and secrets are never in the file. `mcp-learnings` reads `CURSOR_API_KEY` from the process environment; `mcp-index` reads `OPENAI_API_KEY` the same way. Paths for the servers to work on are passed by the agent to the tools (`load_solution`, `index_repository`, ...) or expressed with `${PLUGIN_DATA}`; do not use `--restrict` there unless the workspace lives under the plugin data directory. `mcp-omni` sets `MCP_OMNI_REGISTRY` to `/absolute/path/omni.localhost.registry.json`, the same placeholder as `examples/cursor.mcp.json`. Replace it with a real registry file (copy `examples/omni.localhost.registry.json`). The process does not create that file. Adding real servers to agentPacks also means updating its `PluginMcpContractTests`, which currently assert that every `mcp.json` is an empty scaffold.
 
 ## Troubleshooting
 

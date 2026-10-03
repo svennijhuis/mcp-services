@@ -61,7 +61,7 @@ Import `mcp-omni` over stdio instead of the five servers. It exposes `discover_s
 cd docker && docker compose up -d --build
 ```
 
-Starts PostgreSQL with pgvector plus the five backend servers over Streamable HTTP on `localhost:5100-5104` (`/mcp`), and `mcp-omni` on `localhost:5105`. Index and Learnings use the shared PostgreSQL store, so every agent that connects learns from the same data; without Docker they fall back to SQLite under `~/.mcp-services`. The compose registry leaves every backend disabled until you enable it.
+Starts PostgreSQL with pgvector plus the five backend servers over Streamable HTTP on `localhost:5100-5104` (`/mcp`), and `mcp-omni` on `localhost:5105`. Index and Learnings use the shared PostgreSQL store, so every agent that connects learns from the same data; without Docker they fall back to SQLite under `~/.mcp-services`. Compose mounts `docker/omni.compose.registry.json` (compose DNS, every backend enabled). The checked-in `registry.json` next to the executable stays disabled.
 
 ## Repository layout
 

@@ -1,0 +1,59 @@
+{
+  "servers": [
+    {
+      "id": "filesystem",
+      "title": "FileSystem",
+      "summary": "Sandboxed file access: read, write, edit, search, and directory trees.",
+      "enabled": true,
+      "role": "files",
+      "baseUrl": "http://filesystem:5100/mcp",
+      "healthUrl": "http://filesystem:5100/healthz",
+      "projection": "summary",
+      "maxChars": 8000
+    },
+    {
+      "id": "roslyn",
+      "title": "Roslyn",
+      "summary": "C# and .NET analysis: navigation, diagnostics, refactorings, build, and test.",
+      "enabled": true,
+      "role": "code",
+      "baseUrl": "http://roslyn:5100/mcp",
+      "healthUrl": "http://roslyn:5100/healthz",
+      "projection": "summary",
+      "maxChars": 8000
+    },
+    {
+      "id": "database",
+      "title": "Database",
+      "summary": "Schema discovery and guarded queries for SQLite, PostgreSQL, and SQL Server.",
+      "enabled": true,
+      "role": "data",
+      "baseUrl": "http://database:5100/mcp",
+      "healthUrl": "http://database:5100/healthz",
+      "projection": "summary",
+      "maxChars": 8000
+    },
+    {
+      "id": "index",
+      "title": "Index",
+      "summary": "Learning codebase index: symbol search, full text, notes, and freshness.",
+      "enabled": true,
+      "role": "search",
+      "baseUrl": "http://index:5100/mcp",
+      "healthUrl": "http://index:5100/healthz",
+      "projection": "summary",
+      "maxChars": 8000
+    },
+    {
+      "id": "learnings",
+      "title": "Learnings",
+      "summary": "Self-learning loop: record outcomes, recommend, and draft proposals.",
+      "enabled": true,
+      "role": "memory",
+      "baseUrl": "http://learnings:5100/mcp",
+      "healthUrl": "http://learnings:5100/healthz",
+      "projection": "summary",
+      "maxChars": 8000
+    }
+  ]
+}

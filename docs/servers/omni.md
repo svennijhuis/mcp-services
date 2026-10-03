@@ -13,7 +13,7 @@ Four tools:
 | Tool | What it returns |
 | --- | --- |
 | `discover_servers` | Enabled servers only: id, title, summary. |
-| `discover_tools` | One server, or every enabled server. Names and one line. No schemas. |
+| `discover_tools` | One server, or every enabled server. Names and one line. No schemas. When server is omitted, a failed backend is an error row and the others are still listed. |
 | `get_tool_schema` | One tool: name, description, inputSchema. Not a dump of every tool. |
 | `invoke_tool` | Forwards arguments, then truncates the text to that server's maxChars (8000 in the checked-in registry). |
 
@@ -26,6 +26,8 @@ Each backend is initialized once (protocol `2025-06-18`), then Omni calls `tools
 ## Registry
 
 `registry.json` next to the executable lists the five backends. Every entry defaults to `enabled: false`, `projection: summary`, and `maxChars: 8000`. The checked-in file uses compose DNS (`http://filesystem:5100/mcp` and the same shape for roslyn, database, index, and learnings).
+
+Docker compose does not use that disabled file. It sets `MCP_OMNI_REGISTRY` to `/config/omni.registry.json`, a read-only mount of [docker/omni.compose.registry.json](../../docker/omni.compose.registry.json). That catalog uses the same compose DNS names and sets `enabled: true`.
 
 Laptop prove uses loopback. Copy [examples/omni.localhost.registry.json](../../examples/omni.localhost.registry.json) and point the process at it:
 

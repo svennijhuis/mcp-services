@@ -21,21 +21,32 @@ public sealed class OmniTools(OmniRegistry registry, OmniGateway gateway)
     }
 
     [McpServerTool(Name = "discover_tools", ReadOnly = true, Idempotent = true, OpenWorld = true, Title = "Discover tools")]
-    [Description("List tool names and a one-line description for one enabled server, or for every enabled server when server is omitted. Does not return schemas. A URL is not accepted.")]
+    [Description("List tool names and a one-line description for one enabled server, or for every enabled server when server is omitted. When server is omitted, a backend that fails is an error row and the other servers are still listed. A named server that fails is a tool error. Does not return schemas. A URL is not accepted.")]
     public async Task<object> DiscoverTools(
         RequestContext<CallToolRequestParams> context,
         [Description("Server id from discover_servers. Omit to list every enabled server.")] string? server = null,
         CancellationToken cancellationToken = default)
     {
         RejectUrl(context);
-        var targets = string.IsNullOrWhiteSpace(server) ? registry.Enabled : [registry.Require(server)];
+        var sweep = string.IsNullOrWhiteSpace(server);
+        var targets = sweep ? registry.Enabled : [registry.Require(server)];
         var rows = new List<object>();
         foreach (var entry in targets)
         {
-            var tools = await gateway.ListToolsAsync(entry, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BackendTool> tools;
+            try
+            {
+                tools = await gateway.ListToolsAsync(entry, cancellationToken).ConfigureAwait(false);
+            }
+            catch (ToolException ex) when (sweep)
+            {
+                rows.Add(new { server = entry.Id, name = (string?)null, description = (string?)null, error = (string?)ex.Message });
+                continue;
+            }
+
             foreach (var tool in tools.OrderBy(tool => tool.Name, StringComparer.Ordinal))
             {
-                rows.Add(new { server = entry.Id, name = tool.Name, description = OmniGateway.OneLine(tool.Description) });
+                rows.Add(new { server = entry.Id, name = (string?)tool.Name, description = (string?)OmniGateway.OneLine(tool.Description), error = (string?)null });
             }
         }
 
