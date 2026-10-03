@@ -7,6 +7,7 @@ SERVERS=(
   "mcp-roslyn=src/servers/McpServices.Roslyn/McpServices.Roslyn.csproj"
   "mcp-index=src/servers/McpServices.Index/McpServices.Index.csproj"
   "mcp-learnings=src/servers/McpServices.Learnings/McpServices.Learnings.csproj"
+  "mcp-omni=src/servers/McpServices.Omni/McpServices.Omni.csproj"
 )
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

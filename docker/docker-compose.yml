@@ -128,6 +128,23 @@ services:
     ports:
       - "127.0.0.1:5104:5100"
 
+  omni:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        SERVER: McpServices.Omni
+    image: mcp-omni:local
+    environment:
+      <<: *common-env
+      # Enabled catalog. The image registry.json stays disabled.
+      MCP_OMNI_REGISTRY: /config/omni.registry.json
+    volumes:
+      - ./omni.compose.registry.json:/config/omni.registry.json:ro
+    ports:
+      - "127.0.0.1:5105:5100"
+
 volumes:
   postgres-data:
   learnings-data:

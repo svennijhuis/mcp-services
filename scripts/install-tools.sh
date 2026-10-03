@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install (or update) the servers as .NET global tools so that `mcp-filesystem`, `mcp-database`,
-# `mcp-roslyn`, `mcp-index` and `mcp-learnings` are on PATH — which is exactly what the agentPacks
+# `mcp-roslyn`, `mcp-index`, `mcp-learnings`, and `mcp-omni` are on PATH, which is what the agentPacks
 # mcp.json schema needs (bare command tokens, no paths).
 # Usage: scripts/install-tools.sh [server ...] [--source nupkg]
 set -euo pipefail

@@ -27,6 +27,11 @@
       "command": "mcp-learnings",
       "args": ["--store", "sqlite:${PLUGIN_DATA}/learnings/learnings.db", "--data-dir", "${PLUGIN_DATA}/learnings", "--dispatch", "manual"],
       "env": { "MCP_LEARNINGS_REPO": "svennijhuis/agentPacks" }
+    },
+    "omni": {
+      "type": "stdio",
+      "command": "mcp-omni",
+      "env": { "MCP_OMNI_REGISTRY": "/absolute/path/omni.localhost.registry.json" }
     }
   }
 }

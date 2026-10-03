@@ -21,6 +21,10 @@
     "learnings": {
       "command": "/Users/you/.dotnet/tools/mcp-learnings",
       "args": ["--repo", "owner/name"]
+    },
+    "omni": {
+      "command": "/Users/you/.dotnet/tools/mcp-omni",
+      "env": { "MCP_OMNI_REGISTRY": "/Users/you/omni.localhost.registry.json" }
     }
   }
 }

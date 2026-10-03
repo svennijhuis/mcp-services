@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsServerProject>true</IsServerProject>
+    <AssemblyName>McpServices.Omni</AssemblyName>
+    <RootNamespace>McpServices.Omni</RootNamespace>
+    <ToolCommandName>mcp-omni</ToolCommandName>
+    <PackageId>McpServices.Omni</PackageId>
+    <Description>Local MCP gateway: one stdio process that discovers and invokes the other mcp-services servers over HTTP.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../shared/McpServices.Hosting/McpServices.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="registry.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
