@@ -20,6 +20,10 @@
     "learnings": {
       "command": "mcp-learnings",
       "args": ["--repo", "owner/name", "--dispatch", "manual"]
+    },
+    "omni": {
+      "command": "mcp-omni",
+      "env": { "MCP_OMNI_REGISTRY": "/absolute/path/omni.localhost.registry.json" }
     }
   }
 }

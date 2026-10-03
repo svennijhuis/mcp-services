@@ -67,6 +67,7 @@ WORKSPACE=/abs/repo docker compose up -d --build
 | database | 5102 | exposes the shared PostgreSQL itself as alias `mcp` (read-only) |
 | index | 5103 | PostgreSQL + pgvector |
 | learnings | 5104 | PostgreSQL + pgvector |
+| omni | 5105 | registry.json (compose DNS, backends disabled until enabled) |
 | postgres | 5432 (loopback) | named volume `postgres-data` |
 
 Clients connect with `{ "url": "http://localhost:5103/mcp" }` (see `examples/docker.mcp.json`). Ports are bound to `127.0.0.1`; put a reverse proxy with TLS and authentication in front before exposing anything beyond your machine, because the servers themselves have no authentication layer.

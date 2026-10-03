@@ -9,6 +9,7 @@
       <Project Path="src/servers/McpServices.Database/McpServices.Database.csproj" />
       <Project Path="src/servers/McpServices.Index/McpServices.Index.csproj" />
       <Project Path="src/servers/McpServices.Learnings/McpServices.Learnings.csproj" />
+      <Project Path="src/servers/McpServices.Omni/McpServices.Omni.csproj" />
       <Project Path="src/servers/McpServices.Roslyn/McpServices.Roslyn.csproj" />
     </Folder>
   </Folder>
@@ -20,6 +21,7 @@
     <Project Path="tests/McpServices.Storage.Tests/McpServices.Storage.Tests.csproj" />
     <Project Path="tests/McpServices.Index.Tests/McpServices.Index.Tests.csproj" />
     <Project Path="tests/McpServices.Learnings.Tests/McpServices.Learnings.Tests.csproj" />
+    <Project Path="tests/McpServices.Omni.Tests/McpServices.Omni.Tests.csproj" />
     <Project Path="tests/McpServices.Roslyn.Tests/McpServices.Roslyn.Tests.csproj" />
   </Folder>
 </Solution>

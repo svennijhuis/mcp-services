@@ -5,6 +5,7 @@
     "learnings": { "url": "http://localhost:5104/mcp" },
     "database": { "url": "http://localhost:5102/mcp" },
     "roslyn": { "url": "http://localhost:5101/mcp" },
-    "filesystem": { "url": "http://localhost:5100/mcp" }
+    "filesystem": { "url": "http://localhost:5100/mcp" },
+    "omni": { "url": "http://localhost:5105/mcp" }
   }
 }

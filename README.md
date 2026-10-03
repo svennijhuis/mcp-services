@@ -9,6 +9,7 @@ A monorepo of [Model Context Protocol](https://modelcontextprotocol.io) servers 
 | Roslyn | `mcp-roslyn` | C#/.NET analysis on real solutions: navigation, references, diagnostics, metrics, refactorings with preview, scripting, build/test | [docs/servers/roslyn.md](docs/servers/roslyn.md) |
 | Index | `mcp-index` | Learning codebase index: incremental symbol + full-text (+ embeddings) search with feedback, notes, staleness detection, git hooks | [docs/servers/index.md](docs/servers/index.md) |
 | Learnings | `mcp-learnings` | Self-learning loop: agents record what worked/failed, get recommendations, corroborated learnings become draft-PR proposals via Cursor | [docs/servers/learnings.md](docs/servers/learnings.md) |
+| Omni | `mcp-omni` | One stdio import for the five HTTP backends: discover, one schema, then invoke | [docs/servers/omni.md](docs/servers/omni.md) |
 
 Shared libraries: `McpServices.Hosting` (transports, CLI parsing, JSON/paging/error helpers, `server_info` tool) and `McpServices.Storage` (`IKnowledgeStore` over SQLite or PostgreSQL + pgvector, used by Index and Learnings).
 
@@ -19,7 +20,7 @@ Requirements: [.NET SDK 10.0](https://dotnet.microsoft.com/download) (`global.js
 ```bash
 git clone https://github.com/svennijhuis/mcp-services && cd mcp-services
 scripts/build.sh                 # restore, build, test
-scripts/install-tools.sh         # installs mcp-filesystem, mcp-database, mcp-roslyn, mcp-index, mcp-learnings as .NET global tools
+scripts/install-tools.sh         # installs mcp-filesystem, mcp-database, mcp-roslyn, mcp-index, mcp-learnings, mcp-omni as .NET global tools
 mcp-roslyn --help
 ```
 
@@ -39,13 +40,28 @@ Then add the servers to your client. For Cursor, `.cursor/mcp.json`:
 
 Ready-made configurations for Cursor, Claude Desktop, VS Code, the [agentPacks](https://github.com/svennijhuis/agentPacks) plugin schema and the Docker/HTTP stack are in [`examples/`](examples). All the ways to run the servers (from source, published binary, global tool, Docker) are described in [docs/LOCAL_USAGE.md](docs/LOCAL_USAGE.md).
 
+## One import: mcp-omni
+
+Import `mcp-omni` over stdio instead of the five servers. It exposes `discover_servers`, `discover_tools`, `get_tool_schema`, and `invoke_tool`, and calls one HTTP backend at a time. The checked-in registry leaves every server disabled and uses compose DNS. For a laptop, set `MCP_OMNI_REGISTRY` to a file that uses `http://127.0.0.1:5100/mcp` through `5104` ([examples/omni.localhost.registry.json](examples/omni.localhost.registry.json)). Details: [docs/servers/omni.md](docs/servers/omni.md). Diagrams: [docs/omni-design.md](docs/omni-design.md). APIM is later ([infrastructure-azure-white-label#9](https://github.com/svennijhuis/infrastructure-azure-white-label/pull/9)).
+
+```json
+{
+  "mcpServers": {
+    "omni": {
+      "command": "mcp-omni",
+      "env": { "MCP_OMNI_REGISTRY": "/absolute/path/omni.localhost.registry.json" }
+    }
+  }
+}
+```
+
 ## Docker (shared store for teams and remote agents)
 
 ```bash
 cd docker && docker compose up -d --build
 ```
 
-Starts PostgreSQL with pgvector plus all five servers over Streamable HTTP on `localhost:5100-5104` (`/mcp`). Index and Learnings use the shared PostgreSQL store, so every agent that connects learns from the same data; without Docker they fall back to SQLite under `~/.mcp-services`.
+Starts PostgreSQL with pgvector plus the five backend servers over Streamable HTTP on `localhost:5100-5104` (`/mcp`), and `mcp-omni` on `localhost:5105`. Index and Learnings use the shared PostgreSQL store, so every agent that connects learns from the same data; without Docker they fall back to SQLite under `~/.mcp-services`. The compose registry leaves every backend disabled until you enable it.
 
 ## Repository layout
 
@@ -58,7 +74,7 @@ tests/fixtures/SampleSolution       two-project solution used by the Roslyn test
 examples/                           client configurations
 docker/                             Dockerfiles + docker-compose.yml (pgvector)
 scripts/                            build, publish, pack, install-tools, git hooks for mcp-index
-docs/                               architecture, adding a server, local usage, per-server docs
+docs/                               architecture, adding a server, local usage, per-server docs, omni design diagrams
 ```
 
 ## Design principles
@@ -70,7 +86,7 @@ docs/                               architecture, adding a server, local usage, 
 - Configuration lives in `args` and environment variables, never in the command; credentials (`CURSOR_API_KEY`, `OPENAI_API_KEY`, connection passwords) are read from the process environment only.
 - Shared storage abstraction: SQLite for a single developer, PostgreSQL + pgvector for shared/remote use, same code path.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the internals and [docs/ADDING_A_SERVER.md](docs/ADDING_A_SERVER.md) to add a sixth server.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the internals and [docs/ADDING_A_SERVER.md](docs/ADDING_A_SERVER.md) to add another server. `mcp-omni` is the stdio gateway in front of the five HTTP servers.
 
 ## Development
 

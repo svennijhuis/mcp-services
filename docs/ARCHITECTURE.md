@@ -41,6 +41,7 @@ flowchart LR
 | `src/servers/McpServices.Roslyn` | `WorkspaceManager` (MSBuildWorkspace sessions per `workspaceId`, disk refresh, apply), `Symbols` (lookup/formatting), `CodeFixCatalog`, tool classes per area (workspace, navigation, diagnostics, refactoring, snippets, scripting, build). |
 | `src/servers/McpServices.Index` | `Indexer` (walker, content hashing, language detection, C# symbol extraction, markdown headings), `FreshnessChecker` (git HEAD/working tree vs indexed state), `IndexCoordinator` (auto-refresh policies, writer lock), `SearchService` (FTS + symbol + feedback + vector, fused with RRF), `NotesService`, `RelatedFilesService` (git co-change), `EmbeddingService`, `IndexWatcher`, CLI mode + git hooks. |
 | `src/servers/McpServices.Learnings` | `LearningsRepository` (fingerprint dedupe, occurrences, feedback), `RecommendationService` (confidence with time decay, conflict detection), `LearningsMarkdown` (agentPacks `docs/learnings.md` import/export), `ProposalService` + `ImprovementPrompt`, dispatchers (dry-run, Cursor Cloud Agents API, Cursor CLI, webhook) behind `DispatchService` policy guards. |
+| `src/servers/McpServices.Omni` | `mcp-omni`: `discover_servers`, `discover_tools`, `get_tool_schema`, `invoke_tool`. HTTP client of the five servers. No auth. |
 | `tests/McpServices.TestSupport` | `ServerFixture` starts a server assembly as a child process over stdio with the SDK `McpClient`; `EnvironmentFactAttribute` for infrastructure-dependent tests. |
 
 ## Hosting: one binary, two transports

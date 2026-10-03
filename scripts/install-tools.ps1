@@ -1,7 +1,7 @@
 # Install (or update) the servers as .NET global tools on Windows.
 # Usage: pwsh scripts/install-tools.ps1 [-Servers mcp-roslyn,mcp-index]
 param(
-    [string[]] $Servers = @('mcp-filesystem', 'mcp-database', 'mcp-roslyn', 'mcp-index', 'mcp-learnings'),
+    [string[]] $Servers = @('mcp-filesystem', 'mcp-database', 'mcp-roslyn', 'mcp-index', 'mcp-learnings', 'mcp-omni'),
     [string] $Source = 'nupkg'
 )
 $ErrorActionPreference = 'Stop'
@@ -14,6 +14,7 @@ $projects = @{
     'mcp-roslyn'     = 'src/servers/McpServices.Roslyn/McpServices.Roslyn.csproj'
     'mcp-index'      = 'src/servers/McpServices.Index/McpServices.Index.csproj'
     'mcp-learnings'  = 'src/servers/McpServices.Learnings/McpServices.Learnings.csproj'
+    'mcp-omni'       = 'src/servers/McpServices.Omni/McpServices.Omni.csproj'
 }
 
 if (-not (Test-Path $Source) -or -not (Get-ChildItem $Source -ErrorAction SilentlyContinue)) {
