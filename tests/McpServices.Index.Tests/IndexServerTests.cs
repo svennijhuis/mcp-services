@@ -137,7 +137,7 @@ public class IndexServerTests(IndexServerFixture fixture) : IClassFixture<IndexS
     {
         var tools = await Server.ToolNamesAsync();
         Assert.Equal(
-            ["find_related_files", "forget", "forget_repository", "get_file_outline", "get_symbol", "index_repository", "index_status", "list_repositories", "mark_useful", "recall", "reindex", "remember", "search_code", "search_symbols", "server_info", "verify_index"],
+            ["blast_radius", "find_related_files", "forget", "forget_repository", "get_file_outline", "get_symbol", "index_repository", "index_status", "list_repositories", "mark_useful", "recall", "reindex", "reindex_commit", "remember", "search_code", "search_symbols", "server_info", "upsert_rationale", "verify_index", "why"],
             tools);
     }
 
@@ -343,5 +343,90 @@ public class IndexServerTests(IndexServerFixture fixture) : IClassFixture<IndexS
         using var doc = JsonDocument.Parse(text.Text);
         Assert.Equal(repoId, doc.RootElement.GetProperty("repoId").GetString());
         Assert.True(doc.RootElement.GetProperty("indexed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Commit_tools_keep_search_notes_and_symbol_docs()
+    {
+        if (!fixture.HasGit)
+        {
+            return;
+        }
+
+        await Server.CallJsonAsync("index_repository");
+        var reindex = await Server.CallJsonAsync("reindex_commit");
+        Assert.True(reindex.GetProperty("completed").GetBoolean());
+        Assert.Equal("syntax", reindex.GetProperty("source").GetString());
+        Assert.True(reindex.GetProperty("symbols").GetInt32() > 0);
+
+        var unknown = await Server.CallJsonAsync("why", new { anchor = "SubmitAsync" });
+        Assert.True(unknown.GetProperty("unknown").GetBoolean());
+        Assert.Empty(unknown.GetProperty("rationale").EnumerateArray());
+        Assert.DoesNotContain("single entry point", unknown.GetRawText(), StringComparison.Ordinal);
+
+        var saved = await Server.CallJsonAsync("upsert_rationale", new
+        {
+            anchor = "SubmitAsync",
+            text = "Orders enter through SubmitAsync only.",
+            confidence = "high",
+            source = "test",
+        });
+        Assert.Equal("active", saved.GetProperty("status").GetString());
+
+        var why = await Server.CallJsonAsync("why", new { anchor = "SubmitAsync" });
+        Assert.False(why.GetProperty("unknown").GetBoolean());
+        Assert.Equal("Orders enter through SubmitAsync only.", why.GetProperty("rationale")[0].GetProperty("text").GetString());
+
+        var blast = await Server.CallJsonAsync("blast_radius", new { anchor = "SubmitAsync" });
+        Assert.Contains("Not a proof", blast.GetProperty("hint").GetString(), StringComparison.Ordinal);
+        var names = blast.GetProperty("symbols").EnumerateArray().Select(s => s.GetProperty("name").GetString()).ToList();
+        Assert.Contains("SubmitAsync", names);
+        Assert.Contains("SaveAsync", names);
+        Assert.Contains("Post", names);
+
+        var heading = await Server.CallExpectingErrorAsync("upsert_rationale", new
+        {
+            anchor = "SubmitAsync",
+            text = "# Not a rationale",
+            confidence = "high",
+            source = "test",
+        });
+        Assert.Contains("heading", heading, StringComparison.Ordinal);
+
+        await Server.CallJsonAsync("remember", new { note = "a note is not a rationale about PendingCount" });
+        var noteIsNotWhy = await Server.CallJsonAsync("why", new { anchor = "PendingCount" });
+        Assert.True(noteIsNotWhy.GetProperty("unknown").GetBoolean());
+
+        var search = await Server.CallJsonAsync("search_code", new { query = "SubmitAsync" });
+        Assert.True(search.GetProperty("total").GetInt32() > 0);
+
+        var symbol = await Server.CallJsonAsync("get_symbol", new { name = "Shop.Orders.OrderService.SubmitAsync", includeStale = true });
+        var declaration = Assert.Single(symbol.GetProperty("symbols").EnumerateArray());
+        Assert.Contains("single entry point", declaration.GetProperty("doc").GetString(), StringComparison.Ordinal);
+        Assert.False(declaration.TryGetProperty("rationale", out _));
+
+        var scip = Path.Combine(fixture.Root, "index.scip.json");
+        await File.WriteAllTextAsync(scip, """{"documents":[]}""");
+        try
+        {
+            var empty = await Server.CallJsonAsync("reindex_commit");
+            Assert.Equal("scip", empty.GetProperty("source").GetString());
+            Assert.Equal(0, empty.GetProperty("symbols").GetInt32());
+            var still = await Server.CallJsonAsync("search_code", new { query = "OrderService" });
+            Assert.True(still.GetProperty("total").GetInt32() > 0);
+            var hidden = await Server.CallJsonAsync("why", new { anchor = saved.GetProperty("anchor").GetString() });
+            Assert.True(hidden.GetProperty("unknown").GetBoolean());
+            var withStale = await Server.CallJsonAsync("why", new { anchor = saved.GetProperty("anchor").GetString(), includeStale = true });
+            Assert.Contains(withStale.GetProperty("rationale").EnumerateArray(), row => row.GetProperty("text").GetString() == "Orders enter through SubmitAsync only.");
+        }
+        finally
+        {
+            File.Delete(scip);
+            await Server.CallJsonAsync("reindex_commit");
+        }
+
+        await Server.CallJsonAsync("reindex");
+        var notes = await Server.CallJsonAsync("recall", new { query = "PendingCount" });
+        Assert.Contains(notes.GetProperty("notes").EnumerateArray(), n => n.GetProperty("note").GetString()!.Contains("not a rationale", StringComparison.Ordinal));
     }
 }
