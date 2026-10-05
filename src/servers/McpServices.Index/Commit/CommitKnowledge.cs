@@ -106,7 +106,7 @@ public sealed class CommitKnowledge(IKnowledgeStore store, IndexRepository repos
         string? commit,
         string? ruleId,
         string? symbolHash,
-        bool forceStale,
+        bool forceActive,
         string? hintPath,
         int? hintLine,
         int? hintCol,
@@ -135,8 +135,8 @@ public sealed class CommitKnowledge(IKnowledgeStore store, IndexRepository repos
         var (key, symbol) = await ResolveAsync(commits, connection, identity.RepoId, sha, anchor, cancellationToken).ConfigureAwait(false);
         var requested = string.IsNullOrWhiteSpace(symbolHash) ? null : symbolHash.Trim();
         var mismatch = symbol is null || (requested is not null && !string.Equals(requested, symbol.ContentHash, StringComparison.Ordinal));
-        // hash mismatch inserts as stale unless force_stale=true
-        var status = mismatch && !forceStale ? RationaleStatus.Stale : RationaleStatus.Active;
+        // hash mismatch inserts as stale unless force_active=true
+        var status = mismatch && !forceActive ? RationaleStatus.Stale : RationaleStatus.Active;
         var storedHash = status == RationaleStatus.Active && symbol is not null
             ? symbol.ContentHash
             : symbol?.ContentHash ?? requested;
