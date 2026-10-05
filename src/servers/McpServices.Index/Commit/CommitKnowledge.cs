@@ -135,16 +135,11 @@ public sealed class CommitKnowledge(IKnowledgeStore store, IndexRepository repos
         var (key, symbol) = await ResolveAsync(commits, connection, identity.RepoId, sha, anchor, cancellationToken).ConfigureAwait(false);
         var requested = string.IsNullOrWhiteSpace(symbolHash) ? null : symbolHash.Trim();
         var mismatch = symbol is null || (requested is not null && !string.Equals(requested, symbol.ContentHash, StringComparison.Ordinal));
-        if (mismatch && !forceStale)
-        {
-            var detail = symbol is null
-                ? "No indexed symbol matches that anchor at this commit."
-                : "The symbol hash does not match this commit.";
-            throw new ToolException($"{detail} Pass forceStale=true to store the row as stale.");
-        }
-
-        var status = mismatch ? RationaleStatus.Stale : RationaleStatus.Active;
-        var storedHash = symbol?.ContentHash ?? requested;
+        // hash mismatch inserts as stale unless force_stale=true
+        var status = mismatch && !forceStale ? RationaleStatus.Stale : RationaleStatus.Active;
+        var storedHash = status == RationaleStatus.Active && symbol is not null
+            ? symbol.ContentHash
+            : symbol?.ContentHash ?? requested;
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var superseded = 0;
         if (status == RationaleStatus.Active)

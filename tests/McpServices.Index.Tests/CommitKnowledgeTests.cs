@@ -221,10 +221,12 @@ public class CommitKnowledgeTests
         try
         {
             await File.WriteAllTextAsync(Path.Combine(root, "Pipe.cs"), Source);
-            await Git(root, "init", "-q");
+            await Git(root, "init", "-q", "-b", "main");
+            await Git(root, "config", "user.email", "t@t");
+            await Git(root, "config", "user.name", "t");
+            await Git(root, "config", "merge.ff", "false");
             await Git(root, "add", "-A");
-            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "a");
-            var defaultBranch = (await GitOut(root, "rev-parse", "--abbrev-ref", "HEAD")).Trim();
+            await Git(root, "commit", "-q", "-m", "a");
             var shaA = (await GitOut(root, "rev-parse", "HEAD")).Trim();
 
             var knowledge = new CommitKnowledge(store, new IndexRepository(store), new IndexOptions(), NullLogger<CommitKnowledge>.Instance);
@@ -273,7 +275,7 @@ public class CommitKnowledgeTests
             await WriteMain(root, "version B");
             await Git(root, "checkout", "-q", "-b", "feature");
             await Git(root, "add", "-A");
-            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "b");
+            await Git(root, "commit", "-q", "-m", "b");
             var shaB = (await GitOut(root, "rev-parse", "HEAD")).Trim();
             var indexedB = await knowledge.ReindexAsync(identity, shaB, CancellationToken.None);
             Assert.False(indexedB.Merge);
@@ -284,29 +286,33 @@ public class CommitKnowledgeTests
             var whyB = await knowledge.WhyAsync(identity, "Main", shaB, false, null, CancellationToken.None);
             Assert.True(whyB.Unknown);
 
-            await Assert.ThrowsAsync<McpServices.Hosting.ToolException>(() => knowledge.UpsertAsync(identity, "Main", "wrong hash", "high", "tester", shaB, "rule-1", "not-the-hash", false, null, null, null, CancellationToken.None));
-            var forced = await knowledge.UpsertAsync(identity, "Main", "stored stale on purpose", "low", "tester", shaB, "rule-1", "not-the-hash", true, null, null, null, CancellationToken.None);
-            Assert.Equal("stale", forced.Status);
-            Assert.False(forced.SupersededPrevious);
+            var soft = await knowledge.UpsertAsync(identity, "Main", "wrong hash", "high", "tester", shaB, "rule-1", "not-the-hash", false, null, null, null, CancellationToken.None);
+            Assert.Equal("stale", soft.Status);
+            Assert.False(soft.SupersededPrevious);
             Assert.Equal("active", await StatusAsync(connection, saved.Id));
+
+            var forced = await knowledge.UpsertAsync(identity, "Main", "stored active on purpose", "low", "tester", shaB, "rule-1", "not-the-hash", true, null, null, null, CancellationToken.None);
+            Assert.Equal("active", forced.Status);
+            Assert.True(forced.SupersededPrevious);
+            Assert.Equal("superseded", await StatusAsync(connection, saved.Id));
 
             var branch = await knowledge.UpsertAsync(identity, "Main", "version B replaced the comment.", "high", "tester", shaB, "rule-1", null, false, null, null, null, CancellationToken.None);
             Assert.Equal("active", branch.Status);
             Assert.True(branch.SupersededPrevious);
-            Assert.Equal("superseded", await StatusAsync(connection, saved.Id));
+            Assert.Equal("superseded", await StatusAsync(connection, forced.Id));
             Assert.Equal("version A is the entry.", Assert.Single((await knowledge.WhyAsync(identity, "Main", shaA, false, null, CancellationToken.None)).Rationale).Text);
             Assert.Equal("version B replaced the comment.", Assert.Single((await knowledge.WhyAsync(identity, "Main", shaB, false, null, CancellationToken.None)).Rationale).Text);
             Assert.Equal(1, await connection.ScalarAsync<long>("SELECT COUNT(*) FROM rationale WHERE repo_id = @repoId AND anchor_key = @anchor AND rule_id = 'rule-1' AND status = 'active'", new { repoId = identity.RepoId, anchor = saved.Anchor }));
 
-            await Git(root, "checkout", "-q", defaultBranch);
+            await Git(root, "checkout", "-q", "main");
             await WriteMain(root, "version main");
             await Git(root, "add", "-A");
-            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "main");
-            var merge = await GitRaw(root, "merge", "--no-edit", "feature");
+            await Git(root, "commit", "-q", "-m", "main");
+            var merge = await GitRaw(root, "-c", "merge.ff=false", "merge", "--no-ff", "--no-edit", "feature");
             Assert.False(merge);
             await WriteMain(root, "version merged");
             await Git(root, "add", "-A");
-            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "merge");
+            await Git(root, "commit", "-q", "-m", "merge");
             var shaM = (await GitOut(root, "rev-parse", "HEAD")).Trim();
             var indexedM = await knowledge.ReindexAsync(identity, shaM, CancellationToken.None);
             Assert.True(indexedM.Merge);
@@ -324,9 +330,11 @@ public class CommitKnowledgeTests
             try
             {
                 await File.WriteAllTextAsync(Path.Combine(other, "Pipe.cs"), Source);
-                await Git(other, "init", "-q");
+                await Git(other, "init", "-q", "-b", "main");
+                await Git(other, "config", "user.email", "t@t");
+                await Git(other, "config", "user.name", "t");
                 await Git(other, "add", "-A");
-                await Git(other, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "a");
+                await Git(other, "commit", "-q", "-m", "a");
                 var otherIdentity = RepoIdentity.FromPath(other);
                 Assert.NotEqual(identity.RepoId, otherIdentity.RepoId);
                 await knowledge.ReindexAsync(otherIdentity, null, CancellationToken.None);
