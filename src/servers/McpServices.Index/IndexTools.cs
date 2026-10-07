@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace McpServices.Index;
 
 [McpServerToolType]
-public sealed class IndexTools(IndexCoordinator coordinator, IndexRepository repository, SearchService search, NotesService notes, RelatedFilesService related)
+public sealed class IndexTools(IndexCoordinator coordinator, IndexRepository repository, SearchService search, NotesService notes, RelatedFilesService related, Commit.CommitKnowledge commits)
 {
     private const string RootDescription = "Repository root. Optional when the server was started with a single root or only one repository is indexed.";
 
@@ -34,6 +34,72 @@ public sealed class IndexTools(IndexCoordinator coordinator, IndexRepository rep
         var identity = await coordinator.ResolveAsync(root, cancellationToken).ConfigureAwait(false);
         var result = await coordinator.IndexAsync(identity, force: true, null, cancellationToken).ConfigureAwait(false);
         return new { run = result, status = await coordinator.StatusAsync(identity, cancellationToken).ConfigureAwait(false) };
+    }
+
+    [McpServerTool(Name = "reindex_commit", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false, Title = "Reindex commit")]
+    [Description("Rebuild derived rows (file, symbol, occurrence, symbol_edge) for one git commit. Uses a SCIP index when index.scip or index.scip.json is present, otherwise a syntax graph. Does not delete rationale or business_rule. A full rebuild of that commit, not an incremental index. search_code does not wait on this.")]
+    public async Task<Commit.ReindexCommitResult> ReindexCommit(
+        [Description(RootDescription)] string? root = null,
+        [Description("Commit id or ref. Defaults to HEAD. The tree at that commit is read. Uncommitted files are not included.")] string? commit = null,
+        CancellationToken cancellationToken = default)
+    {
+        var identity = await coordinator.ResolveAsync(root, cancellationToken).ConfigureAwait(false);
+        await coordinator.StoreAsync(cancellationToken).ConfigureAwait(false);
+        return await commits.ReindexAsync(identity, commit, cancellationToken).ConfigureAwait(false);
+    }
+
+    [McpServerTool(Name = "why", ReadOnly = true, Idempotent = true, OpenWorld = false, Title = "Why")]
+    [Description("Rationale for an anchor at one commit. Empty rationale means unknown. Stale rows are omitted unless includeStale is true. Does not invent a rationale from the symbol docstring.")]
+    public async Task<Commit.WhyResult> Why(
+        [Description("Symbol key (SCIP symbol when an indexer produced one, otherwise the fallback key) or a unique symbol name.")] string anchor,
+        [Description(RootDescription)] string? root = null,
+        [Description("Commit id or ref. Defaults to HEAD.")] string? commit = null,
+        [Description("Include stale rationale rows.")] bool includeStale = false,
+        [Description("Only the rationale for this rule id.")] string? ruleId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ToolGuard.NotEmpty(anchor, "anchor");
+        var identity = await coordinator.ResolveAsync(root, cancellationToken).ConfigureAwait(false);
+        await coordinator.StoreAsync(cancellationToken).ConfigureAwait(false);
+        return await commits.WhyAsync(identity, anchor, commit, includeStale, ruleId, cancellationToken).ConfigureAwait(false);
+    }
+
+    [McpServerTool(Name = "blast_radius", ReadOnly = true, Idempotent = true, OpenWorld = false, Title = "Blast radius")]
+    [Description("Walk calls, implements, and references to depth 2 from an anchor and attach active rules whose rationale still matches that commit. Hints, not a proof.")]
+    public async Task<Commit.BlastRadiusResult> BlastRadius(
+        [Description("Symbol key or a unique symbol name.")] string anchor,
+        [Description(RootDescription)] string? root = null,
+        [Description("Commit id or ref. Defaults to HEAD.")] string? commit = null,
+        CancellationToken cancellationToken = default)
+    {
+        ToolGuard.NotEmpty(anchor, "anchor");
+        var identity = await coordinator.ResolveAsync(root, cancellationToken).ConfigureAwait(false);
+        await coordinator.StoreAsync(cancellationToken).ConfigureAwait(false);
+        return await commits.BlastAsync(identity, anchor, commit, cancellationToken).ConfigureAwait(false);
+    }
+
+    [McpServerTool(Name = "upsert_rationale", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, Title = "Upsert rationale")]
+    [Description("Insert a rationale and supersede the previous active row for the same anchor and rule. Confidence, source, and anchor are required. Text is at most 500 characters and cannot contain a markdown heading. hash mismatch inserts as stale unless force_active=true, in which case the row is stored as active and supersedes.")]
+    public async Task<Commit.UpsertRationaleResult> UpsertRationale(
+        [Description("Symbol key or a unique symbol name. Stored as anchor_key.")] string anchor,
+        [Description("Why this symbol is the way it is. 1 to 500 characters. No markdown headings.")] string text,
+        [Description("How sure the author is. Required. For example high, medium, or low.")] string confidence,
+        [Description("Who or what this rationale came from. Required.")] string source,
+        [Description(RootDescription)] string? root = null,
+        [Description("Commit the rationale is about. Defaults to HEAD.")] string? commit = null,
+        [Description("Business rule id. Empty means this rationale is not attached to a rule. One active rationale per anchor and rule.")] string? ruleId = null,
+        [Description("Expected symbol content hash. When it differs from the indexed symbol, the write is a hash mismatch.")] string? symbolHash = null,
+        [Description("On hash mismatch, store as active and supersede instead of inserting as stale.")] bool forceActive = false,
+        [Description("File path hint. Line numbers are hints, not the anchor.")] string? hintPath = null,
+        [Description("1-based line hint.")] int? hintLine = null,
+        [Description("1-based column hint.")] int? hintCol = null,
+        CancellationToken cancellationToken = default)
+    {
+        ToolGuard.NotEmpty(anchor, "anchor");
+        ToolGuard.NotEmpty(text, "text");
+        var identity = await coordinator.ResolveAsync(root, cancellationToken).ConfigureAwait(false);
+        await coordinator.StoreAsync(cancellationToken).ConfigureAwait(false);
+        return await commits.UpsertAsync(identity, anchor, text, confidence, source, commit, ruleId, symbolHash, forceActive, hintPath, hintLine, hintCol, cancellationToken).ConfigureAwait(false);
     }
 
     [McpServerTool(Name = "index_status", ReadOnly = true, Idempotent = true, OpenWorld = false, Title = "Index status")]

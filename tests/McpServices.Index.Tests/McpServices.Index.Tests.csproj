@@ -5,4 +5,8 @@
     <ProjectReference Include="../McpServices.TestSupport/McpServices.TestSupport.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
 </Project>

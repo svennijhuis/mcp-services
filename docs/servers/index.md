@@ -30,6 +30,10 @@ mcp-index index|status|verify|rebuild <dir> [--store ...] [--force] [--quiet]   
 | --- | --- |
 | `index_repository` | Incremental index: new/changed files processed, deleted files removed. Safe to call often. |
 | `reindex` | Drop and rebuild one repository (notes and feedback are kept). |
+| `reindex_commit` | Rebuild derived rows for one commit (`file`, `symbol`, `occurrence`, `symbol_edge`). Does not delete `rationale` or `business_rule`. |
+| `why` | Rationale for an anchor at that commit. An empty result means unknown. Pass `includeStale: true` to see stale rows. |
+| `blast_radius` | Calls, implements, and references to depth 2, with active rules attached. Hints, not a proof. |
+| `upsert_rationale` | Insert a rationale and supersede the previous active row for the same anchor and rule. |
 | `index_status` | Counts, last run, freshness versus git HEAD and the working tree, list of changed files. |
 | `verify_index` | Integrity check (content mismatches, orphans, FTS consistency); `repair: true` fixes what it finds. |
 | `search_code` | Hybrid search: BM25 full text + exact symbol match + feedback boosts + embeddings (if configured), fused with reciprocal rank fusion. Returns a `queryId` for feedback. |
@@ -54,7 +58,34 @@ The index is only valuable if it reflects the checkout, and the checkout also ch
 5. **CLI mode in CI.** `mcp-index index .` after checkout, `mcp-index verify .` to fail a pipeline on corruption.
 6. **`verify_index` / `reindex`.** Recovery when something did go wrong (for example a store copied between machines).
 
-Notes survive all of this: `reindex` and `forget_repository` treat notes differently (kept for reindex, removed only when forgetting the repository).
+Notes survive all of this: `reindex` and `forget_repository` treat notes differently (kept for reindex, removed only when forgetting the repository). Rationale does not go through `remember`, `forget`, or `forget_repository`. Old notes stay notes. They are not imported as rules.
+
+## Commit knowledge
+
+The content-hash index (`files`, `symbols`, `search_code`, `get_symbol`) stays as it is. `repoId` stays a hash of the checkout path, so two worktrees are two indexes. Commit-keyed tables sit beside it and use `(repo_id, commit_sha)`.
+
+Derived rows are rebuilt by `reindex_commit` for that commit only: `file`, `symbol`, `occurrence`, `symbol_edge`. Authored rows are not rebuilt and are not deleted by that tool: `business_rule`, `rationale`, `ticket`, `agent_session`, `link`, `line_span`. Agents supersede a rationale or mark it rejected. They do not delete those rows. Hard-delete of rejected rows, and of stale rows whose symbol is confirmed gone, is a later cleanup job.
+
+A symbol key is `(repo, commit_sha, scip_symbol)` when a SCIP indexer produced one. Otherwise it is `(repo, commit_sha, path, kind, name, start_line, start_col)`. Rationale hangs off `anchor_key` (that symbol key). Line numbers on a rationale are a hint. Docstrings stay on `symbol`. They are not rationale. `why` does not copy them. Confidence, source, and anchor are required. The why text is at most 500 characters and cannot contain a markdown heading. The database rejects a bad row.
+
+`upsert_rationale` inserts a new row. When the symbol hash matches, the new row is active and the previous active row for the same `(repo, anchor_key, rule_id)` becomes superseded. hash mismatch inserts as stale unless force_active=true, in which case the row is stored as active and supersedes. `why` omits stale rows unless `includeStale` is true. A hash that does not match the commit is treated as stale for that read, so a rationale written for another snapshot does not answer `why` there.
+
+`reindex_commit` reads the git tree at that commit, not uncommitted files. When `index.scip.json` or `index.scip` is in the checkout, that SCIP index supplies symbols and edges. Otherwise the commit is parsed as a syntax graph (C# syntax, plus the existing line patterns for other languages): declarations, calls, base types, and identifier references. That is the tree-sitter slot for this slice. It rebuilds the whole commit. It is not an incremental index and it is not a proof. There is no GitHub Actions SCIP job. Existing git hooks still call `mcp-index index` for the content-hash index. A local hook may tree-sitter the changed files. This slice does not add that hook.
+
+Work stays on the commit that was indexed. Merging reindexes the merge commit. A conflict does not change the rationale that still matches `main` until that merge commit is indexed. If the merge symbol matches neither side, both old rationales are marked stale and the resolution needs a new `upsert_rationale`. `search_code` does not wait on SCIP. Empty commit-symbol rows do not hide the content-hash index. `get_symbol` is unchanged and has no `includeStale` flag.
+
+```mermaid
+flowchart LR
+  scip[SCIP or tree-sitter] --> derived[file symbol occurrence edge]
+  author[Human or agent] --> rows[rule and rationale]
+  ci[CI on main SHA] --> reindex[reindex_commit]
+  reindex --> derived
+  reindex --> stale[hash miss marks rationale stale]
+  derived --> read[get_symbol why blast_radius search]
+  rows --> read
+```
+
+Two labels in that picture are not this pull request. There is no Actions SCIP job yet (`ci` is that later step). `search` in the picture is the later tool `search_rationale`, which is not implemented here. `get_symbol` and `search_code` stay as they are.
 
 ## Client configuration
 
@@ -73,6 +104,6 @@ Docker: the `index` service uses the bundled PostgreSQL (`MCP_INDEX_STORE=postgr
 
 ## Storage notes
 
-- SQLite uses FTS5 for full text; PostgreSQL uses `tsvector` with GIN indexes and pgvector for embeddings (falls back to in-process cosine similarity when the extension cannot be created).
+- SQLite uses FTS5 for full text; PostgreSQL uses `tsvector` with GIN indexes. Embeddings are `BYTEA` (SQLite `BLOB`). This slice does not add a vector column.
 - The same `IKnowledgeStore` abstraction backs `mcp-learnings`; both can share a PostgreSQL database.
 - One store can hold many repositories; each is keyed by a `repoId` hashed from the canonical root path (symlinks resolved), so two worktrees of the same repository get separate indexes and the same path always maps to the same id.

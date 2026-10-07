@@ -28,6 +28,27 @@ public sealed class GitCli
         return result.Success ? result.Output.Trim() : null;
     }
 
+    /// <summary>Full commit id for a revision, or null when git cannot resolve it.</summary>
+    public static async Task<string?> ResolveCommitAsync(string root, string revision, CancellationToken cancellationToken)
+    {
+        var result = await RunAsync(root, ["rev-parse", "--verify", "--end-of-options", revision + "^{commit}"], cancellationToken).ConfigureAwait(false);
+        return result.Success ? result.Output.Trim() : null;
+    }
+
+    /// <summary>Number of parents. A merge has two or more. Zero when the revision cannot be read.</summary>
+    public static async Task<int> ParentCountAsync(string root, string sha, CancellationToken cancellationToken)
+    {
+        var result = await RunAsync(root, ["rev-list", "--parents", "-n1", sha], cancellationToken).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            return 0;
+        }
+
+        var line = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return Math.Max(0, parts.Length - 1);
+    }
+
     /// <summary>Tracked plus untracked-not-ignored files, relative paths with forward slashes.</summary>
     public static async Task<IReadOnlyList<string>?> ListFilesAsync(string root, CancellationToken cancellationToken)
     {
