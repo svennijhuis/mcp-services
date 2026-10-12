@@ -17,22 +17,6 @@ internal static class ScipIndexReader
     /// <summary>True when a repo-relative path (forward slashes) is one of the SCIP index locations.</summary>
     public static bool IsIndexPath(string relativePath) => Array.IndexOf(IndexPaths, relativePath) >= 0;
 
-    public static bool TryFind(string root, out string path)
-    {
-        foreach (var relative in new[] { "index.scip.json", Path.Combine(".scip", "index.scip.json"), "index.scip", Path.Combine(".scip", "index.scip") })
-        {
-            var full = Path.Combine(root, relative);
-            if (File.Exists(full) && new FileInfo(full).Length > 0)
-            {
-                path = full;
-                return true;
-            }
-        }
-
-        path = string.Empty;
-        return false;
-    }
-
     public static void Apply(CommitGraph graph, string scipPath, IReadOnlyDictionary<string, string> files)
     {
         List<RawSymbol> symbols;

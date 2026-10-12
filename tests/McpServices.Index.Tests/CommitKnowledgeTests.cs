@@ -103,6 +103,8 @@ public class CommitKnowledgeTests
             await connection.ExecuteAsync(insertRationale, new { anchor = "B", body = "b stale", hash = "h2", status = "stale" });
             await connection.ExecuteAsync(insertRationale, new { anchor = "B", body = "b active", hash = "h2", status = "active" });
             await connection.ExecuteAsync(insertRationale, new { anchor = "C", body = "c miss", hash = "old", status = "stale" });
+            await connection.ExecuteAsync(
+                "INSERT INTO rationale (repo_id, anchor_key, rule_id, commit_sha, body, confidence, source, symbol_hash, status, created_at) VALUES ('r', 'A', '', 'c2', 'other commit newer', 'high', 't', 'h1', 'stale', 0)");
             await connection.ExecuteAsync(insertSymbol, new { key = "A", hash = "h1" });
             await connection.ExecuteAsync(insertSymbol, new { key = "B", hash = "h2" });
             await connection.ExecuteAsync(insertSymbol, new { key = "C", hash = "new" });
@@ -118,6 +120,7 @@ public class CommitKnowledgeTests
             Assert.Equal("superseded", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'b stale'", null));
             Assert.Equal("active", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'b active'", null));
             Assert.Equal("stale", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'c miss'", null));
+            Assert.Equal("stale", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'other commit newer'", null));
         }
         finally
         {

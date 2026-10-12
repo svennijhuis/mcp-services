@@ -127,11 +127,12 @@ internal sealed class CommitRepository(IKnowledgeStore store)
         }
 
         // Stale goes both ways: a stale row whose symbol hash matches again is restored.
-        // The newest match per (anchor, rule) becomes active when no active row exists; older matches become superseded.
+        // The newest match per (anchor, rule) on this commit becomes active when no active row exists; older matches become superseded.
         var hit = $"rationale.symbol_hash IS NOT NULL AND NOT ({miss})";
         var same = "o.repo_id = rationale.repo_id AND o.anchor_key = rationale.anchor_key AND o.rule_id = rationale.rule_id";
+        var peer = merge ? string.Empty : "AND o.commit_sha = @commitSha";
         await connection.ExecuteAsync(
-            $"UPDATE rationale SET status = '{RationaleStatus.Superseded}' WHERE repo_id = @repoId AND status = '{RationaleStatus.Stale}' {scope} AND {hit} AND (EXISTS (SELECT 1 FROM rationale o WHERE {same} AND o.status = '{RationaleStatus.Active}') OR EXISTS (SELECT 1 FROM rationale o WHERE {same} AND o.status = '{RationaleStatus.Stale}' AND o.id > rationale.id AND o.symbol_hash IS NOT NULL AND EXISTS (SELECT 1 FROM symbol s WHERE s.repo_id = o.repo_id AND s.commit_sha = @commitSha AND s.symbol_key = o.anchor_key AND s.content_hash = o.symbol_hash)))",
+            $"UPDATE rationale SET status = '{RationaleStatus.Superseded}' WHERE repo_id = @repoId AND status = '{RationaleStatus.Stale}' {scope} AND {hit} AND (EXISTS (SELECT 1 FROM rationale o WHERE {same} AND o.status = '{RationaleStatus.Active}') OR EXISTS (SELECT 1 FROM rationale o WHERE {same} {peer} AND o.status = '{RationaleStatus.Stale}' AND o.id > rationale.id AND o.symbol_hash IS NOT NULL AND EXISTS (SELECT 1 FROM symbol s WHERE s.repo_id = o.repo_id AND s.commit_sha = @commitSha AND s.symbol_key = o.anchor_key AND s.content_hash = o.symbol_hash)))",
             new { repoId, commitSha },
             transaction,
             cancellationToken).ConfigureAwait(false);
