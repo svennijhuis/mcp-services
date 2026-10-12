@@ -12,6 +12,11 @@ namespace McpServices.Index.Commit;
 /// </summary>
 internal static class ScipIndexReader
 {
+    private static readonly string[] IndexPaths = ["index.scip.json", ".scip/index.scip.json", "index.scip", ".scip/index.scip"];
+
+    /// <summary>True when a repo-relative path (forward slashes) is one of the SCIP index locations.</summary>
+    public static bool IsIndexPath(string relativePath) => Array.IndexOf(IndexPaths, relativePath) >= 0;
+
     public static bool TryFind(string root, out string path)
     {
         foreach (var relative in new[] { "index.scip.json", Path.Combine(".scip", "index.scip.json"), "index.scip", Path.Combine(".scip", "index.scip") })

@@ -409,15 +409,12 @@ public class IndexServerTests(IndexServerFixture fixture) : IClassFixture<IndexS
         await File.WriteAllTextAsync(scip, """{"documents":[]}""");
         try
         {
-            var empty = await Server.CallJsonAsync("reindex_commit");
-            Assert.Equal("scip", empty.GetProperty("source").GetString());
-            Assert.Equal(0, empty.GetProperty("symbols").GetInt32());
-            var still = await Server.CallJsonAsync("search_code", new { query = "OrderService" });
-            Assert.True(still.GetProperty("total").GetInt32() > 0);
-            var hidden = await Server.CallJsonAsync("why", new { anchor = saved.GetProperty("anchor").GetString() });
-            Assert.True(hidden.GetProperty("unknown").GetBoolean());
-            var withStale = await Server.CallJsonAsync("why", new { anchor = saved.GetProperty("anchor").GetString(), includeStale = true });
-            Assert.Contains(withStale.GetProperty("rationale").EnumerateArray(), row => row.GetProperty("text").GetString() == "Orders enter through SubmitAsync only.");
+            var worktreeOnly = await Server.CallJsonAsync("reindex_commit");
+            Assert.Equal("syntax", worktreeOnly.GetProperty("source").GetString());
+            Assert.True(worktreeOnly.GetProperty("symbols").GetInt32() > 0);
+            var visible = await Server.CallJsonAsync("why", new { anchor = saved.GetProperty("anchor").GetString() });
+            Assert.False(visible.GetProperty("unknown").GetBoolean());
+            Assert.Contains(visible.GetProperty("rationale").EnumerateArray(), row => row.GetProperty("text").GetString() == "Orders enter through SubmitAsync only.");
         }
         finally
         {

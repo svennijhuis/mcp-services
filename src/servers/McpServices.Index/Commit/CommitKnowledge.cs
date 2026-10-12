@@ -135,7 +135,7 @@ public sealed class CommitKnowledge(IKnowledgeStore store, IndexRepository repos
         var (key, symbol) = await ResolveAsync(commits, connection, identity.RepoId, sha, anchor, cancellationToken).ConfigureAwait(false);
         var requested = string.IsNullOrWhiteSpace(symbolHash) ? null : symbolHash.Trim();
         var mismatch = symbol is null || (requested is not null && !string.Equals(requested, symbol.ContentHash, StringComparison.Ordinal));
-        // hash mismatch inserts as stale unless force_active=true
+        // hash mismatch inserts as stale unless forceActive=true
         var status = mismatch && !forceActive ? RationaleStatus.Stale : RationaleStatus.Active;
         var storedHash = status == RationaleStatus.Active && symbol is not null
             ? symbol.ContentHash
@@ -276,19 +276,32 @@ public sealed class CommitKnowledge(IKnowledgeStore store, IndexRepository repos
 
     private async Task<(CommitGraph Graph, string Source)> BuildAsync(string root, string sha, CancellationToken cancellationToken)
     {
-        var tree = await CommitTreeReader.ReadAsync(root, sha, cancellationToken).ConfigureAwait(false);
+        var rules = IgnoreRules.Load(root, includeGitignore: false);
+        var maxBytes = (long)options.MaxFileKb * 1024;
+        // Ignore rules and the size cap run on the ls-tree listing, before any blob is read.
+        // A SCIP index is only used when it is committed in this same tree, never from the worktree.
+        var tree = await CommitTreeReader.ReadAsync(
+            root,
+            sha,
+            (path, size) => ScipIndexReader.IsIndexPath(path) || (!rules.IsIgnored(path) && size <= maxBytes),
+            cancellationToken).ConfigureAwait(false);
         if (!tree.Success)
         {
             throw new ToolException(tree.Error ?? "Could not read that commit.");
         }
 
-        var rules = IgnoreRules.Load(root, includeGitignore: false);
-        var maxBytes = (long)options.MaxFileKb * 1024;
         var kept = new List<(string Path, string Language, string Text)>();
         var graph = new CommitGraph();
+        CommitFileBytes? scip = null;
         foreach (var file in tree.Files)
         {
-            if (rules.IsIgnored(file.Path) || file.Bytes.LongLength > maxBytes || Language.IsBinary(file.Bytes))
+            if (ScipIndexReader.IsIndexPath(file.Path))
+            {
+                scip ??= file;
+                continue;
+            }
+
+            if (Language.IsBinary(file.Bytes))
             {
                 continue;
             }
@@ -299,9 +312,20 @@ public sealed class CommitKnowledge(IKnowledgeStore store, IndexRepository repos
             kept.Add((file.Path, language, text));
         }
 
-        if (ScipIndexReader.TryFind(root, out var scipPath))
+        if (scip is not null)
         {
-            ScipIndexReader.Apply(graph, scipPath, kept.ToDictionary(file => file.Path, file => file.Text, StringComparer.Ordinal));
+            var dir = Directory.CreateTempSubdirectory("mcp-index-scip-");
+            try
+            {
+                var scipPath = Path.Combine(dir.FullName, Path.GetFileName(scip.Path));
+                await File.WriteAllBytesAsync(scipPath, scip.Bytes, cancellationToken).ConfigureAwait(false);
+                ScipIndexReader.Apply(graph, scipPath, kept.ToDictionary(file => file.Path, file => file.Text, StringComparer.Ordinal));
+            }
+            finally
+            {
+                dir.Delete(recursive: true);
+            }
+
             return (graph, "scip");
         }
 

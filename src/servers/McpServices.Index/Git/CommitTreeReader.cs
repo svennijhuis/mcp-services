@@ -5,22 +5,49 @@ namespace McpServices.Index.Git;
 /// <summary>Bytes of tracked files at one commit. The worktree is not read, so uncommitted edits stay out.</summary>
 public static class CommitTreeReader
 {
-    public static async Task<CommitTree> ReadAsync(string root, string sha, CancellationToken cancellationToken)
+    /// <summary>Lists the tree with sizes and only reads blobs that <paramref name="keep"/> accepts (path, size in bytes).</summary>
+    public static async Task<CommitTree> ReadAsync(string root, string sha, Func<string, long, bool> keep, CancellationToken cancellationToken)
     {
-        var listed = await GitCli.RunAsync(root, ["ls-tree", "-r", "-z", "--name-only", sha], cancellationToken).ConfigureAwait(false);
+        var listed = await GitCli.RunAsync(root, ["ls-tree", "-r", "-z", "-l", sha], cancellationToken).ConfigureAwait(false);
         if (!listed.Success)
         {
             return new CommitTree(false, string.IsNullOrWhiteSpace(listed.Error) ? "git ls-tree failed" : listed.Error.Trim(), []);
         }
 
-        var paths = listed.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-        if (paths.Length == 0)
+        var paths = new List<string>();
+        foreach (var entry in listed.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (ParseEntry(entry) is { } parsed && keep(parsed.Path, parsed.Size))
+            {
+                paths.Add(parsed.Path);
+            }
+        }
+
+        if (paths.Count == 0)
         {
             return new CommitTree(true, null, []);
         }
 
         var files = await CatAsync(root, sha, paths, cancellationToken).ConfigureAwait(false);
         return new CommitTree(true, null, files);
+    }
+
+    /// <summary>Parses one <c>ls-tree -l</c> line: "mode type object size\tpath". Only blobs are returned.</summary>
+    internal static (string Path, long Size)? ParseEntry(string entry)
+    {
+        var tab = entry.IndexOf('\t');
+        if (tab < 0)
+        {
+            return null;
+        }
+
+        var meta = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (meta.Length < 4 || meta[1] != "blob" || !long.TryParse(meta[3], out var size))
+        {
+            return null;
+        }
+
+        return (entry[(tab + 1)..].Replace('\\', '/'), size);
     }
 
     private static async Task<IReadOnlyList<CommitFileBytes>> CatAsync(string root, string sha, IReadOnlyList<string> paths, CancellationToken cancellationToken)

@@ -79,7 +79,7 @@ public sealed class IndexTools(IndexCoordinator coordinator, IndexRepository rep
     }
 
     [McpServerTool(Name = "upsert_rationale", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, Title = "Upsert rationale")]
-    [Description("Insert a rationale and supersede the previous active row for the same anchor and rule. Confidence, source, and anchor are required. Text is at most 500 characters and cannot contain a markdown heading. hash mismatch inserts as stale unless force_active=true, in which case the row is stored as active and supersedes.")]
+    [Description("Insert a rationale and supersede the previous active row for the same anchor and rule. Confidence, source, and anchor are required. Text is at most 500 characters and cannot contain a markdown heading. hash mismatch inserts as stale unless forceActive=true, in which case the row is stored as active and supersedes.")]
     public async Task<Commit.UpsertRationaleResult> UpsertRationale(
         [Description("Symbol key or a unique symbol name. Stored as anchor_key.")] string anchor,
         [Description("Why this symbol is the way it is. 1 to 500 characters. No markdown headings.")] string text,

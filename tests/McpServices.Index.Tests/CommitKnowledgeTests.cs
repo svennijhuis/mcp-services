@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Diagnostics;
 using McpServices.Index.Commit;
+using McpServices.Index.Git;
 using McpServices.Index.Indexing;
 using McpServices.Storage;
 using McpServices.TestSupport;
@@ -40,6 +41,95 @@ public class CommitKnowledgeTests
         }
         """;
 
+    [Theory]
+    [InlineData("100644 blob 0123abcd     42\tsrc/A.cs", "src/A.cs", 42L)]
+    [InlineData("100644 blob 0123abcd 7\tdir with space/b.txt", "dir with space/b.txt", 7L)]
+    public void Ls_tree_long_entry_parses_path_and_size(string entry, string path, long size)
+    {
+        var parsed = CommitTreeReader.ParseEntry(entry);
+        Assert.Equal((path, size), parsed);
+    }
+
+    [Theory]
+    [InlineData("160000 commit 0123abcd       -\tvendor/sub")]
+    [InlineData("040000 tree 0123abcd       -\tsrc")]
+    [InlineData("garbage")]
+    public void Ls_tree_non_blob_entries_are_skipped(string entry) => Assert.Null(CommitTreeReader.ParseEntry(entry));
+
+    [Fact]
+    public async Task Commit_tree_only_reads_blobs_the_filter_keeps()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "mcp-index-tree-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "node_modules"));
+            await File.WriteAllTextAsync(Path.Combine(root, "Small.cs"), "class Small {}");
+            await File.WriteAllTextAsync(Path.Combine(root, "Big.cs"), new string('x', 4096));
+            await File.WriteAllTextAsync(Path.Combine(root, "node_modules", "dep.js"), "x");
+            await Git(root, "init", "-q");
+            await Git(root, "add", "-A", "-f");
+            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "a");
+            var rules = IgnoreRules.Load(root, includeGitignore: false);
+            var seen = new List<(string Path, long Size)>();
+            var tree = await CommitTreeReader.ReadAsync(root, "HEAD", (path, size) =>
+            {
+                seen.Add((path, size));
+                return !rules.IsIgnored(path) && size <= 1024;
+            }, CancellationToken.None);
+            Assert.True(tree.Success);
+            Assert.Equal(["Small.cs"], tree.Files.Select(f => f.Path));
+            Assert.Contains(("Big.cs", 4096L), seen);
+            Assert.Contains(seen, s => s.Path == "node_modules/dep.js");
+        }
+        finally
+        {
+            DeleteTree(root);
+        }
+    }
+
+    [Fact]
+    public async Task Stale_rationale_is_restored_when_the_symbol_hash_matches_again()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "mcp-index-restore-" + Guid.NewGuid().ToString("N") + ".db");
+        var store = new SqliteStore(StoreOptions.Sqlite(path), NullLogger<SqliteStore>.Instance);
+        try
+        {
+            await store.InitializeAsync(IndexSchema.Migrations);
+            await using var connection = await store.OpenAsync();
+            const string insertRationale = "INSERT INTO rationale (repo_id, anchor_key, rule_id, commit_sha, body, confidence, source, symbol_hash, status, created_at) VALUES ('r', @anchor, '', 'c1', @body, 'high', 't', @hash, @status, 0)";
+            const string insertSymbol = "INSERT INTO symbol (repo_id, commit_sha, symbol_key, path, kind, name, start_line, start_col, end_line, end_col, content_hash) VALUES ('r', 'c1', @key, 'A.cs', 'method', @key, 1, 1, 1, 1, @hash)";
+            await connection.ExecuteAsync(insertRationale, new { anchor = "A", body = "older", hash = "h1", status = "stale" });
+            await connection.ExecuteAsync(insertRationale, new { anchor = "A", body = "newer", hash = "h1", status = "stale" });
+            await connection.ExecuteAsync(insertRationale, new { anchor = "B", body = "b stale", hash = "h2", status = "stale" });
+            await connection.ExecuteAsync(insertRationale, new { anchor = "B", body = "b active", hash = "h2", status = "active" });
+            await connection.ExecuteAsync(insertRationale, new { anchor = "C", body = "c miss", hash = "old", status = "stale" });
+            await connection.ExecuteAsync(insertSymbol, new { key = "A", hash = "h1" });
+            await connection.ExecuteAsync(insertSymbol, new { key = "B", hash = "h2" });
+            await connection.ExecuteAsync(insertSymbol, new { key = "C", hash = "new" });
+
+            await using (var transaction = await connection.BeginTransactionAsync())
+            {
+                await new CommitRepository(store).MarkStaleAsync(connection, transaction, "r", "c1", merge: false, CancellationToken.None);
+                await transaction.CommitAsync();
+            }
+
+            Assert.Equal("active", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'newer'", null));
+            Assert.Equal("superseded", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'older'", null));
+            Assert.Equal("superseded", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'b stale'", null));
+            Assert.Equal("active", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'b active'", null));
+            Assert.Equal("stale", await connection.ScalarAsync<string>("SELECT status FROM rationale WHERE body = 'c miss'", null));
+        }
+        finally
+        {
+            await store.DisposeAsync();
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
     [Fact]
     public async Task Scip_json_and_protobuf_supply_symbols_when_present()
     {
@@ -74,6 +164,10 @@ public class CommitKnowledgeTests
 
             var knowledge = new CommitKnowledge(store, new IndexRepository(store), new IndexOptions(), NullLogger<CommitKnowledge>.Instance);
             var identity = RepoIdentity.FromPath(root);
+            var worktreeOnly = await knowledge.ReindexAsync(identity, null, CancellationToken.None);
+            Assert.Equal("syntax", worktreeOnly.Source);
+            await Git(root, "add", "-A");
+            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "scip json");
             var json = await knowledge.ReindexAsync(identity, null, CancellationToken.None);
             Assert.Equal("scip", json.Source);
             Assert.True(json.Files >= 1);
@@ -82,11 +176,13 @@ public class CommitKnowledgeTests
             Assert.Equal(symbol, why.Anchor);
             Assert.DoesNotContain("From the indexer", string.Join('\n', why.Rationale.Select(r => r.Text)), StringComparison.Ordinal);
             await using var connection = await store.OpenAsync();
-            Assert.Equal(1, await connection.ScalarAsync<long>("SELECT COUNT(*) FROM symbol_edge WHERE repo_id = @repoId AND kind = 'implements'", new { repoId = identity.RepoId }));
+            Assert.Equal(1, await connection.ScalarAsync<long>("SELECT COUNT(*) FROM symbol_edge WHERE repo_id = @repoId AND commit_sha = @sha AND kind = 'implements'", new { repoId = identity.RepoId, sha = json.CommitSha }));
             Assert.Equal("From the indexer.", await connection.ScalarAsync<string>("SELECT doc FROM symbol WHERE symbol_key = @symbol", new { symbol }));
 
             File.Delete(Path.Combine(root, "index.scip.json"));
             await File.WriteAllBytesAsync(Path.Combine(root, "index.scip"), ScipBytes("Pipe.cs", "scip-bin . . Demo/App#Main().", "Main"));
+            await Git(root, "add", "-A");
+            await Git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "scip bin");
             var binary = await knowledge.ReindexAsync(identity, null, CancellationToken.None);
             Assert.Equal("scip", binary.Source);
             Assert.Equal(1, await connection.ScalarAsync<long>("SELECT COUNT(*) FROM symbol WHERE name = 'Main' AND scip_symbol = 'scip-bin . . Demo/App#Main().'"));
