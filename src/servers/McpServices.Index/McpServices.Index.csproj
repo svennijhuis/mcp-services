@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="McpServices.Index.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../shared/McpServices.Hosting/McpServices.Hosting.csproj" />
     <ProjectReference Include="../../shared/McpServices.Storage/McpServices.Storage.csproj" />
   </ItemGroup>

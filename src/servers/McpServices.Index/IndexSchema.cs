@@ -246,5 +246,241 @@ public static class IndexSchema
                     PRIMARY KEY (repo_id)
                 );
                 """),
+        // Commit-keyed rows beside the content-hash tables. Derived rows (file, symbol, occurrence,
+        // symbol_edge) are rebuilt for one (repo_id, commit_sha). Authored rows are not.
+        // Embeddings stay on the BYTEA column from migration 1. This migration does not add pgvector.
+        new(2, "commit_knowledge",
+            SqliteSql: """
+                CREATE TABLE file (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    PRIMARY KEY (repo_id, commit_sha, path)
+                );
+                CREATE TABLE symbol (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    symbol_key TEXT NOT NULL,
+                    scip_symbol TEXT,
+                    path TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    start_col INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    end_col INTEGER NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    doc TEXT,
+                    signature TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY (repo_id, commit_sha, symbol_key)
+                );
+                CREATE INDEX symbol_name ON symbol(repo_id, commit_sha, name);
+                CREATE INDEX symbol_scip ON symbol(repo_id, commit_sha, scip_symbol);
+                CREATE TABLE occurrence (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    symbol_key TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    start_col INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    end_col INTEGER NOT NULL,
+                    role TEXT NOT NULL CHECK (role IN ('definition', 'reference'))
+                );
+                CREATE INDEX occurrence_symbol ON occurrence(repo_id, commit_sha, symbol_key);
+                CREATE TABLE symbol_edge (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    from_key TEXT NOT NULL,
+                    to_key TEXT NOT NULL,
+                    kind TEXT NOT NULL CHECK (kind IN ('calls', 'implements', 'references')),
+                    PRIMARY KEY (repo_id, commit_sha, from_key, to_key, kind)
+                );
+                CREATE INDEX symbol_edge_to ON symbol_edge(repo_id, commit_sha, to_key);
+                CREATE TABLE business_rule (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id TEXT NOT NULL,
+                    rule_id TEXT NOT NULL,
+                    statement TEXT NOT NULL CHECK (length(trim(statement)) > 0),
+                    status TEXT NOT NULL CHECK (status IN ('active', 'stale', 'superseded', 'rejected')),
+                    created_at BIGINT NOT NULL
+                );
+                CREATE UNIQUE INDEX business_rule_one_active ON business_rule(repo_id, rule_id) WHERE status = 'active';
+                CREATE TABLE rationale (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id TEXT NOT NULL,
+                    anchor_key TEXT NOT NULL CHECK (length(trim(anchor_key)) > 0),
+                    rule_id TEXT NOT NULL DEFAULT '',
+                    commit_sha TEXT NOT NULL,
+                    body TEXT NOT NULL CHECK (
+                        length(body) <= 500
+                        AND length(trim(body)) >= 1
+                        AND instr(char(10) || replace(body, char(13), ''), char(10) || '#') = 0
+                        AND instr(char(10) || replace(body, char(13), ''), char(10) || ' #') = 0
+                        AND instr(char(10) || replace(body, char(13), ''), char(10) || '  #') = 0
+                        AND instr(char(10) || replace(body, char(13), ''), char(10) || '   #') = 0),
+                    confidence TEXT NOT NULL CHECK (length(trim(confidence)) > 0),
+                    source TEXT NOT NULL CHECK (length(trim(source)) > 0),
+                    symbol_hash TEXT,
+                    hint_path TEXT,
+                    hint_line INTEGER,
+                    hint_col INTEGER,
+                    status TEXT NOT NULL CHECK (status IN ('active', 'stale', 'superseded', 'rejected')),
+                    created_at BIGINT NOT NULL
+                );
+                CREATE INDEX rationale_anchor ON rationale(repo_id, anchor_key, status);
+                CREATE UNIQUE INDEX rationale_one_active ON rationale(repo_id, anchor_key, rule_id) WHERE status = 'active';
+                CREATE TABLE ticket (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id TEXT NOT NULL,
+                    ticket_key TEXT NOT NULL,
+                    title TEXT,
+                    url TEXT,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at BIGINT NOT NULL
+                );
+                CREATE TABLE agent_session (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id TEXT NOT NULL,
+                    session_key TEXT NOT NULL,
+                    created_at BIGINT NOT NULL
+                );
+                CREATE TABLE link (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id TEXT NOT NULL,
+                    from_kind TEXT NOT NULL,
+                    from_key TEXT NOT NULL,
+                    to_kind TEXT NOT NULL,
+                    to_key TEXT NOT NULL,
+                    created_at BIGINT NOT NULL
+                );
+                CREATE TABLE line_span (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo_id TEXT NOT NULL,
+                    anchor_key TEXT,
+                    path TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    created_at BIGINT NOT NULL
+                );
+                """,
+            PostgresSql: """
+                CREATE TABLE file (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    PRIMARY KEY (repo_id, commit_sha, path)
+                );
+                CREATE TABLE symbol (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    symbol_key TEXT NOT NULL,
+                    scip_symbol TEXT,
+                    path TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    start_col INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    end_col INTEGER NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    doc TEXT,
+                    signature TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY (repo_id, commit_sha, symbol_key)
+                );
+                CREATE INDEX symbol_name ON symbol(repo_id, commit_sha, name);
+                CREATE INDEX symbol_scip ON symbol(repo_id, commit_sha, scip_symbol);
+                CREATE TABLE occurrence (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    symbol_key TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    start_col INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    end_col INTEGER NOT NULL,
+                    role TEXT NOT NULL CHECK (role IN ('definition', 'reference'))
+                );
+                CREATE INDEX occurrence_symbol ON occurrence(repo_id, commit_sha, symbol_key);
+                CREATE TABLE symbol_edge (
+                    repo_id TEXT NOT NULL,
+                    commit_sha TEXT NOT NULL,
+                    from_key TEXT NOT NULL,
+                    to_key TEXT NOT NULL,
+                    kind TEXT NOT NULL CHECK (kind IN ('calls', 'implements', 'references')),
+                    PRIMARY KEY (repo_id, commit_sha, from_key, to_key, kind)
+                );
+                CREATE INDEX symbol_edge_to ON symbol_edge(repo_id, commit_sha, to_key);
+                CREATE TABLE business_rule (
+                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    rule_id TEXT NOT NULL,
+                    statement TEXT NOT NULL CHECK (length(btrim(statement)) > 0),
+                    status TEXT NOT NULL CHECK (status IN ('active', 'stale', 'superseded', 'rejected')),
+                    created_at BIGINT NOT NULL
+                );
+                CREATE UNIQUE INDEX business_rule_one_active ON business_rule(repo_id, rule_id) WHERE status = 'active';
+                CREATE TABLE rationale (
+                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    anchor_key TEXT NOT NULL CHECK (length(btrim(anchor_key)) > 0),
+                    rule_id TEXT NOT NULL DEFAULT '',
+                    commit_sha TEXT NOT NULL,
+                    body TEXT NOT NULL CHECK (
+                        char_length(body) <= 500
+                        AND char_length(btrim(body)) >= 1
+                        AND strpos(chr(10) || replace(body, chr(13), ''), chr(10) || '#') = 0
+                        AND strpos(chr(10) || replace(body, chr(13), ''), chr(10) || ' #') = 0
+                        AND strpos(chr(10) || replace(body, chr(13), ''), chr(10) || '  #') = 0
+                        AND strpos(chr(10) || replace(body, chr(13), ''), chr(10) || '   #') = 0),
+                    confidence TEXT NOT NULL CHECK (length(btrim(confidence)) > 0),
+                    source TEXT NOT NULL CHECK (length(btrim(source)) > 0),
+                    symbol_hash TEXT,
+                    hint_path TEXT,
+                    hint_line INTEGER,
+                    hint_col INTEGER,
+                    status TEXT NOT NULL CHECK (status IN ('active', 'stale', 'superseded', 'rejected')),
+                    created_at BIGINT NOT NULL
+                );
+                CREATE INDEX rationale_anchor ON rationale(repo_id, anchor_key, status);
+                CREATE UNIQUE INDEX rationale_one_active ON rationale(repo_id, anchor_key, rule_id) WHERE status = 'active';
+                CREATE TABLE ticket (
+                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    ticket_key TEXT NOT NULL,
+                    title TEXT,
+                    url TEXT,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at BIGINT NOT NULL
+                );
+                CREATE TABLE agent_session (
+                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    session_key TEXT NOT NULL,
+                    created_at BIGINT NOT NULL
+                );
+                CREATE TABLE link (
+                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    from_kind TEXT NOT NULL,
+                    from_key TEXT NOT NULL,
+                    to_kind TEXT NOT NULL,
+                    to_key TEXT NOT NULL,
+                    created_at BIGINT NOT NULL
+                );
+                CREATE TABLE line_span (
+                    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    anchor_key TEXT,
+                    path TEXT NOT NULL,
+                    start_line INTEGER NOT NULL,
+                    end_line INTEGER NOT NULL,
+                    created_at BIGINT NOT NULL
+                );
+                """),
     ];
 }

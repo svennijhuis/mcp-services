@@ -1,5 +1,6 @@
 using McpServices.Hosting;
 using McpServices.Index;
+using McpServices.Index.Commit;
 using McpServices.Index.Embeddings;
 using McpServices.Index.Indexing;
 using McpServices.Index.Search;
@@ -9,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 var descriptor = new ServerDescriptor("mcp-index", "Learning codebase index: incremental symbol and full-text indexing, hybrid search with feedback, notes with staleness detection, and freshness tracking against git.")
 {
-    Instructions = "Start with index_status or search_code; the index refreshes itself when it is stale. Use mark_useful after a search that helped and remember/recall for facts worth keeping between sessions.",
+    Instructions = "Start with index_status or search_code; the index refreshes itself when it is stale. Use mark_useful after a search that helped and remember/recall for notes between sessions. reindex_commit, why, blast_radius, and upsert_rationale are the commit-scoped tools. why is empty when the rationale is unknown. Do not treat a docstring as a rationale.",
     Flags = ["restrict", "watch", "quiet", "force"],
     Usage = """
         Usage: mcp-index [transport options] [--root <dir>]... [--store sqlite:<path>|postgres:<conn>] [--auto-refresh inline|background|off]
@@ -68,6 +69,7 @@ return await McpServerHost.RunAsync(args, descriptor, context =>
     context.Services.AddSingleton<SearchService>();
     context.Services.AddSingleton<NotesService>();
     context.Services.AddSingleton<RelatedFilesService>();
+    context.Services.AddSingleton<CommitKnowledge>();
 
     context.Mcp.WithTools<IndexTools>(ToolJson.Options);
     context.Mcp.WithResources<IndexResources>();
